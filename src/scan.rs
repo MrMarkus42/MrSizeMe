@@ -6,7 +6,6 @@
 //! the content of a file.
 
 use std::collections::{HashSet, VecDeque};
-use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -16,7 +15,7 @@ use std::sync::{Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use crate::platform::{self, Sizer};
+use crate::platform::{self, Entry, Sizer};
 use crate::tree::{Kind, Node, NodeId, ROOT, SortKey, Tree, flags};
 
 #[derive(Debug, Clone)]
@@ -77,16 +76,6 @@ impl Progress {
 struct Job {
     node: NodeId,
     path: PathBuf,
-}
-
-struct Entry {
-    name: Box<OsStr>,
-    kind: Kind,
-    size: u64,
-    allocated: u64,
-    modified: i64,
-    link_id: Option<(u64, u64)>,
-    device: Option<u64>,
 }
 
 struct Listing {
@@ -198,61 +187,16 @@ pub fn scan(root: &Path, opts: &Options, progress: &Progress) -> io::Result<Tree
 
 fn read_folder(job: Job, sizer: &Sizer, progress: &Progress) -> Listing {
     progress.set_current(&job.path);
-    let mut entries = Vec::new();
-    let mut error = None;
     if progress.is_cancelled() {
-        return Listing { job, entries, error };
+        return Listing { job, entries: Vec::new(), error: None };
     }
-    match fs::read_dir(&job.path) {
-        Err(e) => error = Some(e),
-        Ok(rd) => {
-            for ent in rd {
-                let ent = match ent {
-                    Ok(ent) => ent,
-                    Err(e) => {
-                        error.get_or_insert(e);
-                        continue;
-                    }
-                };
-                // Does not follow links on any system.
-                let md = match ent.metadata() {
-                    Ok(md) => md,
-                    Err(e) => {
-                        error.get_or_insert(e);
-                        continue;
-                    }
-                };
-                let ft = md.file_type();
-                let kind = if ft.is_symlink() {
-                    Kind::Link
-                } else if ft.is_dir() {
-                    Kind::Dir
-                } else if ft.is_file() {
-                    Kind::File
-                } else {
-                    Kind::Other
-                };
-                let (size, allocated) = match kind {
-                    Kind::File => (md.len(), sizer.allocated(&|| ent.path(), &md)),
-                    Kind::Dir => (0, sizer.allocated(&|| ent.path(), &md)),
-                    Kind::Link | Kind::Other => (0, 0),
-                };
-                if kind == Kind::Dir {
-                    progress.dirs.fetch_add(1, Ordering::Relaxed);
-                } else {
-                    progress.files.fetch_add(1, Ordering::Relaxed);
-                    progress.bytes.fetch_add(size, Ordering::Relaxed);
-                }
-                entries.push(Entry {
-                    name: ent.file_name().into_boxed_os_str(),
-                    kind,
-                    size,
-                    allocated,
-                    modified: platform::modified(&md),
-                    link_id: if kind == Kind::File { platform::link_id(&md) } else { None },
-                    device: if kind == Kind::Dir { platform::device(&md) } else { None },
-                });
-            }
+    let (entries, error) = platform::read_entries(&job.path, sizer);
+    for e in &entries {
+        if e.kind == Kind::Dir {
+            progress.dirs.fetch_add(1, Ordering::Relaxed);
+        } else {
+            progress.files.fetch_add(1, Ordering::Relaxed);
+            progress.bytes.fetch_add(e.size, Ordering::Relaxed);
         }
     }
     if error.is_some() {
@@ -306,4 +250,22 @@ fn collect(
         .collect();
     let first = tree.add_children(parent, nodes);
     subfolders.into_iter().map(|(i, path)| Job { node: first + i as NodeId, path }).collect()
+}
+
+/// Scan for admin rights: on Windows the fast MFT reading is tried first
+/// (it needs admin rights and a local NTFS drive); otherwise, or if it
+/// fails, the normal scan runs.
+pub fn scan_with_admin_rights(root: &Path, opts: &Options, progress: &Progress) -> io::Result<Tree> {
+    match crate::mft::scan(root, progress) {
+        Some(Ok(tree)) => {
+            log::info!("fast MFT scan used");
+            Ok(tree)
+        }
+        Some(Err(e)) if e.kind() == io::ErrorKind::Interrupted => Err(e),
+        Some(Err(e)) => {
+            log::warn!("fast MFT scan not possible ({e}); normal scan");
+            scan(root, opts, progress)
+        }
+        None => scan(root, opts, progress),
+    }
 }

@@ -35,9 +35,13 @@ belegen, und hilft sicher beim Aufräumen. Es ist in Rust geschrieben
 * **Live-Aktualisierung:** Nach dem Scan beobachtet das Programm Änderungen
   und passt die Zahlen an, ohne neu zu scannen.
 * **Admin-Modus**
-  * Windows: Knopf „Als Administrator neu starten“; als Admin wird das
-    Sicherungsrecht genutzt (auch geschützte Ordner sichtbar). Schnell-Scan
-    über das NTFS-Inhaltsverzeichnis (MFT), wenn Admin-Rechte vorhanden sind.
+  * Windows: Knopf „Mit Admin-Rechten scannen“ startet (nach der
+    Windows-Rückfrage) ein kleines Scan-Hilfsprogramm mit Admin-Rechten; die
+    Oberfläche bleibt ohne erhöhte Rechte (Entscheidung 24.11.: sicherer als
+    „ganz als Administrator neu starten“). Das Hilfsprogramm nutzt das
+    Sicherungsrecht (auch geschützte Ordner sichtbar) und den Schnell-Scan über
+    das NTFS-Inhaltsverzeichnis (MFT). Ergebnis kommt als Datei in einem
+    frischen Temp-Ordner zurück; das Hilfsprogramm darf nur dorthin schreiben.
   * macOS: Erkennen, ob „Festplattenvollzugriff“ fehlt, und Schritt für
     Schritt zeigen, wo man ihn einschaltet.
   * Linux: kleines Scan-Hilfsprogramm, das über die Systemabfrage (pkexec)
@@ -122,7 +126,7 @@ sind mit minisign signiert; der öffentliche Schlüssel ist eingebaut.
 | 1 | Scanner-Kern, Baumstruktur, Tests | fertig (24.11.) |
 | 2 | Oberfläche: Ordnerbaum, Kachelkarte, Dateitypen, Sprachen, Icon | erste Fassung (24.11.); Icon-Auswahl, Feinschliff offen |
 | 3 | Weitere Ansichten: Ring, Kategorien, Größte/Älteste, Alter, Filter | fertig (24.11.) |
-| 4 | Admin-Modus (Windows, macOS, Linux), MFT-Schnell-Scan | offen |
+| 4 | Admin-Modus (Windows, macOS, Linux), MFT-Schnell-Scan, Menüband | fertig (24.11.); auf echtem Windows/Mac noch vom Nutzer zu testen |
 | 5 | Aufräumhilfe: Wissensliste, Papierkorb, Vorschläge, KI | offen |
 | 6 | Verlauf, Vergleich, Prognose, Warnung, Live-Aktualisierung | offen |
 | 7 | Duplikate, Programme-Ansicht, Cloud-Dateien, Verschieben | offen |

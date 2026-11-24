@@ -18,6 +18,10 @@ up safely. It runs on Windows, macOS and Linux and speaks German and English.
 * File types, categories, largest and oldest files, age distribution.
 * Search by name pattern, category, minimum size and age.
 * CSV export (safe against formula injection in spreadsheets).
+* Scan with admin rights (Windows, Linux) through a small helper; fast
+  NTFS scan via the master file table on Windows; Full Disk Access guide
+  on macOS.
+* Menu band with its own icons, keyboard shortcuts.
 * German and English, light and dark mode.
 
 ## Building

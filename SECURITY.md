@@ -22,5 +22,12 @@ public issue. You will get an answer within a few days.
   folder is written as `~`.
 * **No shell.** Paths are never passed through a shell; the file manager is
   opened with the system's own functions or one plain argument.
+* **Admin rights only where needed.** The window never runs with raised
+  rights. A scan with admin rights starts a second copy of the program in a
+  helper mode that only scans. It writes its result only to standard output
+  or to a new file `scan.bin` in a fresh temp folder made for it, and the
+  window checks every number of that result before using it.
+* **Raw disk data is checked.** The fast NTFS scan reads the master file
+  table directly; every record is checked, broken records are skipped.
 * **Tests stay inside.** One central switch blocks every outside action
   (opening programs or web pages) in all tests.

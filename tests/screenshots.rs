@@ -84,6 +84,8 @@ fn screenshots() {
     shot(true, Lang::De, "ring-kategorien-dunkel", &["Ringdiagramm", "Kategorien"]);
     shot(false, Lang::De, "ring-alter-hell", &["Ringdiagramm", "Alter"]);
     shot(false, Lang::De, "suche-hell", &["Suche"]);
+    shot(false, Lang::De, "menueband-ansicht-hell", &["Ansicht"]);
+    shot(true, Lang::De, "menueband-hilfe-dunkel", &["Hilfe", "Tastenkürzel"]);
     shot(false, Lang::De, "hauptfenster-hell", &[]);
     shot(false, Lang::En, "main-window-light-en", &["Ring chart", "Categories"]);
 }

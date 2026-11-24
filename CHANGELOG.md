@@ -19,3 +19,16 @@
   game libraries or caches decide the category of everything below them.
 - Oldest files and age distribution.
 - Search with name pattern (`*`, `?`), category, minimum size and age.
+- Menu band with tabs (Home, View, Help) and the program's own icons;
+  path line below it; movable windows for About, keyboard shortcuts and
+  Full Disk Access; keyboard shortcuts (F5, Esc, Ctrl+O/F/E, Ctrl+Shift+C,
+  Backspace).
+- Scan with admin rights (Windows, Linux): a helper copy of the program
+  scans with raised rights and hands the result back; the window itself
+  never runs with raised rights. The helper only writes to a fresh temp
+  folder or to its standard output.
+- Windows: folders are listed with one handle per folder (faster, exact
+  space on disk); with admin rights the backup right opens protected
+  folders, and local NTFS drives are read through the master file table.
+- macOS: check and step-by-step guide for Full Disk Access.
+- Scans can be saved in a checked binary format (used by the helper).

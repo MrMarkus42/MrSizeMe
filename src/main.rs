@@ -4,7 +4,7 @@
 // No console window behind the program on Windows (release builds).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -17,6 +17,12 @@ fn main() -> ExitCode {
     if args.iter().any(|a| a == "--version") {
         println!("MrSizeMe {}", env!("CARGO_PKG_VERSION"));
         return ExitCode::SUCCESS;
+    }
+    // Helper mode with admin rights: only scan and hand the result back.
+    if args.first().is_some_and(|a| a == mrsizeme::elevate::HELPER_ARG) {
+        let (Some(root), Some(out)) = (args.get(1), args.get(2)) else { return ExitCode::from(2) };
+        let code = mrsizeme::elevate::run_helper(Path::new(root), Path::new(out));
+        return ExitCode::from(u8::try_from(code).unwrap_or(1));
     }
     if args.first().is_some_and(|a| a == "--scan") {
         let root = args.get(1).map_or_else(|| PathBuf::from("."), PathBuf::from);

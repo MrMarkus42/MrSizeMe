@@ -1,10 +1,12 @@
 //! The program window.
 
 mod folders;
+mod icons;
 mod lists;
 mod map;
 mod paint;
 mod places;
+mod ribbon;
 mod ring;
 
 use std::collections::HashSet;
@@ -66,6 +68,35 @@ struct Running {
     handle: JoinHandle<io::Result<Tree>>,
     root: PathBuf,
     started: Instant,
+    /// Scanned by the helper with admin rights (no live counters).
+    admin: bool,
+}
+
+/// The tabs of the menu band.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tab {
+    Start,
+    View,
+    Help,
+}
+
+/// Commands of the menu band and the keyboard; done after drawing.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Command {
+    Scan(PathBuf),
+    ChooseFolder,
+    Rescan,
+    Cancel,
+    AdminScan,
+    FullDiskAccess,
+    ExportCsv,
+    ExpandAll,
+    CollapseAll,
+    LogFolder,
+    About,
+    Shortcuts,
+    SearchView,
+    Node(Action),
 }
 
 /// Something the user asked for while a list was drawn; done afterwards.
@@ -110,6 +141,14 @@ pub struct App {
     last_duration: Option<Duration>,
     places: Vec<places::Place>,
     title: String,
+    tab: Tab,
+    show_about: bool,
+    show_shortcuts: bool,
+    show_full_access: bool,
+    /// The shown tree was scanned with admin rights.
+    admin_tree: bool,
+    /// This process itself runs with admin rights.
+    elevated: bool,
 }
 
 impl App {
@@ -161,6 +200,12 @@ impl App {
             last_duration: None,
             places: places::list(),
             title: String::new(),
+            tab: Tab::Start,
+            show_about: false,
+            show_shortcuts: false,
+            show_full_access: false,
+            admin_tree: false,
+            elevated: crate::elevate::is_elevated(),
         }
     }
 
@@ -178,20 +223,37 @@ impl App {
     }
 
     fn start_scan(&mut self, path: PathBuf) {
+        self.start(path, false);
+    }
+
+    /// Starts a scan in the background; with `admin` through the helper with admin rights.
+    fn start(&mut self, path: PathBuf, admin: bool) {
         if let Some(r) = &self.running {
             r.progress.cancel();
         }
         let progress = Arc::new(Progress::default());
         let p = Arc::clone(&progress);
         let root = path.clone();
+        let elevated = self.elevated;
         let handle = std::thread::Builder::new()
             .name("scan".into())
-            .spawn(move || scan::scan(&root, &scan::Options::default(), &p))
+            .spawn(move || {
+                if admin {
+                    crate::elevate::scan_as_admin(&root)
+                } else if elevated {
+                    scan::scan_with_admin_rights(&root, &scan::Options::default(), &p)
+                } else {
+                    scan::scan(&root, &scan::Options::default(), &p)
+                }
+            })
             .expect("start scan thread");
-        log::info!("scan started: {}", applog::private(&path));
-        self.running = Some(Running { progress, handle, root: path, started: Instant::now() });
-        self.tree = None;
-        self.generation += 1;
+        log::info!("scan started{}: {}", if admin { " (admin helper)" } else { "" }, applog::private(&path));
+        self.running = Some(Running { progress, handle, root: path, started: Instant::now(), admin });
+        // An admin scan keeps the old result visible until the new one is there.
+        if !admin {
+            self.tree = None;
+            self.generation += 1;
+        }
     }
 
     fn poll_scan(&mut self, ctx: &egui::Context) {
@@ -212,7 +274,11 @@ impl App {
                     if tree.cancelled { " (cancelled)" } else { "" }
                 );
                 self.last_duration = Some(elapsed);
+                self.admin_tree = r.admin || self.elevated;
                 self.set_tree(tree);
+            }
+            Ok(Err(e)) if r.admin && crate::elevate::is_cancelled(&e) => {
+                self.notice = Some((tr().admin_cancelled.to_string(), Instant::now()));
             }
             Ok(Err(e)) => {
                 self.show_error(format!("{}\n{}", r.root.display(), format::io_error(&e)));
@@ -287,73 +353,421 @@ impl App {
         }
     }
 
-    fn toolbar(&mut self, ui: &mut egui::Ui) {
+    /// The menu band with its tabs.
+    fn ribbon(&mut self, ui: &mut egui::Ui) -> Vec<Command> {
+        use icons::Icon;
+        use ribbon::{big, column, group, small};
         let t = tr();
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            let mut go = None;
-            ui.menu_button(t.drives, |ui| {
-                for place in &self.places {
-                    if ui.button(&place.label).clicked() {
-                        go = Some(place.path.clone());
-                        ui.close();
-                    }
-                }
-            });
-            if ui.button(t.choose_folder).clicked()
-                && let Some(dir) = rfd::FileDialog::new().pick_folder()
-            {
-                go = Some(dir);
-            }
-            let field =
-                egui::TextEdit::singleline(&mut self.path_text).hint_text(t.path_hint).desired_width(360.0);
-            let resp = ui.add(field);
-            let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            let busy = self.running.is_some();
-            if busy {
-                if ui.button(t.cancel).clicked()
-                    && let Some(r) = &self.running
-                {
-                    r.progress.cancel();
-                }
-            } else {
-                let label = if self.tree.is_some() { t.rescan } else { t.scan };
-                if (ui.button(label).clicked() || enter) && !self.path_text.trim().is_empty() {
-                    go = Some(PathBuf::from(self.path_text.trim()));
-                }
-            }
-            if self.tree.is_some() && !busy && ui.button(t.export_csv).clicked() {
-                self.export_csv();
-            }
-            if let Some(path) = go {
-                self.path_text = path.display().to_string();
-                self.start_scan(path);
-            }
+        let mut cmds = Vec::new();
+        let has_tree = self.tree.is_some();
+        let busy = self.running.is_some();
+        let sel = self.tree.as_ref().and(self.selected);
 
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                egui::widgets::global_theme_preference_buttons(ui);
-                let mut lang = i18n::lang();
-                egui::ComboBox::from_id_salt("lang")
-                    .selected_text(lang.native_name())
-                    .show_ui(ui, |ui| {
-                        for l in Lang::ALL {
-                            ui.selectable_value(&mut lang, l, l.native_name());
+        ui.add_space(3.0);
+        ui.horizontal(|ui| {
+            for (tab, label) in [(Tab::Start, t.tab_start), (Tab::View, t.tab_view), (Tab::Help, t.tab_help)]
+            {
+                ui.selectable_value(&mut self.tab, tab, egui::RichText::new(label).strong());
+            }
+        });
+        ui.add_space(2.0);
+        egui::ScrollArea::horizontal().id_salt("ribbon_scroll").show(ui, |ui| {
+            ui.horizontal(|ui| match self.tab {
+                Tab::Start => {
+                    group(ui, t.grp_scan, |ui| {
+                        let drives = big(ui, Icon::Drive, t.drives, !busy, false);
+                        egui::Popup::menu(&drives).show(|ui| {
+                            for place in &self.places {
+                                if ui.button(&place.label).clicked() {
+                                    cmds.push(Command::Scan(place.path.clone()));
+                                }
+                            }
+                        });
+                        if big(ui, Icon::FolderOpen, t.btn_folder, !busy, false).clicked() {
+                            cmds.push(Command::ChooseFolder);
                         }
-                    })
-                    .response
-                    .on_hover_text(t.language);
-                if lang != i18n::lang() {
-                    i18n::set_lang(lang);
+                        if busy {
+                            if big(ui, Icon::Stop, t.cancel, true, false).clicked() {
+                                cmds.push(Command::Cancel);
+                            }
+                        } else if big(
+                            ui,
+                            Icon::Rescan,
+                            t.rescan,
+                            has_tree || !self.path_text.is_empty(),
+                            false,
+                        )
+                        .clicked()
+                        {
+                            cmds.push(Command::Rescan);
+                        }
+                    });
+                    group(ui, t.grp_all_folders, |ui| match crate::elevate::support() {
+                        crate::elevate::AdminSupport::Helper => {
+                            let can = !busy && !self.elevated && !self.path_text.trim().is_empty();
+                            let tip = if self.elevated { t.tip_already_admin } else { t.tip_admin_scan };
+                            if big(ui, Icon::Shield, t.btn_admin_scan, can, self.admin_tree)
+                                .on_hover_text(tip)
+                                .clicked()
+                            {
+                                cmds.push(Command::AdminScan);
+                            }
+                        }
+                        crate::elevate::AdminSupport::FullDiskAccess => {
+                            if big(ui, Icon::Key, t.btn_full_access, true, false).clicked() {
+                                cmds.push(Command::FullDiskAccess);
+                            }
+                        }
+                    });
+                    group(ui, t.grp_selection, |ui| {
+                        column(ui, |ui| {
+                            if let Some(id) = sel {
+                                if small(ui, Icon::OpenExternal, t.open_folder, true, false).clicked() {
+                                    cmds.push(Command::Node(Action::OpenFolder(id)));
+                                }
+                                if small(ui, Icon::Copy, t.copy_path, true, false).clicked() {
+                                    cmds.push(Command::Node(Action::CopyPath(id)));
+                                }
+                                if small(ui, Icon::Target, t.btn_show_in_chart, true, false).clicked() {
+                                    cmds.push(Command::Node(Action::MapRoot(id)));
+                                }
+                            } else {
+                                small(ui, Icon::OpenExternal, t.open_folder, false, false);
+                                small(ui, Icon::Copy, t.copy_path, false, false);
+                                small(ui, Icon::Target, t.btn_show_in_chart, false, false);
+                            }
+                        });
+                    });
+                    group(ui, t.grp_export, |ui| {
+                        if big(ui, Icon::Export, t.btn_csv, has_tree && !busy, false).clicked() {
+                            cmds.push(Command::ExportCsv);
+                        }
+                    });
+                }
+                Tab::View => {
+                    group(ui, t.grp_lists, |ui| {
+                        let mut list = |ui: &mut egui::Ui, view: View, icon: Icon, label: &str| {
+                            if small(ui, icon, label, has_tree, self.view == view).clicked() {
+                                self.view = view;
+                            }
+                        };
+                        column(ui, |ui| {
+                            list(ui, View::Folders, Icon::TreeList, t.view_folders);
+                            list(ui, View::Types, Icon::Types, t.view_types);
+                            list(ui, View::Categories, Icon::Categories, t.view_categories);
+                        });
+                        column(ui, |ui| {
+                            list(ui, View::Largest, Icon::Largest, t.view_largest);
+                            list(ui, View::Oldest, Icon::Oldest, t.view_oldest);
+                            list(ui, View::Age, Icon::Age, t.view_age);
+                        });
+                        column(ui, |ui| {
+                            list(ui, View::Search, Icon::Search, t.view_search);
+                        });
+                    });
+                    group(ui, t.grp_chart, |ui| {
+                        if big(ui, Icon::TileMap, t.map_title, has_tree, self.chart == Chart::Map).clicked() {
+                            self.chart = Chart::Map;
+                        }
+                        if big(ui, Icon::Ring, t.ring_title, has_tree, self.chart == Chart::Ring).clicked() {
+                            self.chart = Chart::Ring;
+                        }
+                        let parent = self.tree.as_ref().map(|tr| tr.node(self.map_root).parent);
+                        let up = parent.filter(|&p| p != crate::tree::NO_PARENT);
+                        if big(ui, Icon::Up, t.map_up, up.is_some(), false).clicked()
+                            && let Some(p) = up
+                        {
+                            cmds.push(Command::Node(Action::MapRoot(p)));
+                        }
+                    });
+                    group(ui, t.grp_measure, |ui| {
+                        column(ui, |ui| {
+                            for (m, icon, label) in [
+                                (Measure::Size, Icon::Size, t.show_size),
+                                (Measure::Allocated, Icon::Disk, t.show_allocated),
+                                (Measure::Files, Icon::Count, t.show_count),
+                            ] {
+                                if small(ui, icon, label, has_tree, self.measure == m).clicked() {
+                                    self.measure = m;
+                                }
+                            }
+                        });
+                    });
+                    group(ui, t.grp_tree, |ui| {
+                        column(ui, |ui| {
+                            if small(ui, Icon::Expand, t.expand_all, has_tree, false).clicked() {
+                                cmds.push(Command::ExpandAll);
+                            }
+                            if small(ui, Icon::Collapse, t.collapse_all, has_tree, false).clicked() {
+                                cmds.push(Command::CollapseAll);
+                            }
+                        });
+                    });
+                    group(ui, t.grp_look, |ui| {
+                        let pref = ui.ctx().options(|o| o.theme_preference);
+                        column(ui, |ui| {
+                            for (p, icon, label) in [
+                                (egui::ThemePreference::Light, Icon::Sun, t.theme_light),
+                                (egui::ThemePreference::Dark, Icon::Moon, t.theme_dark),
+                                (egui::ThemePreference::System, Icon::Disk, t.theme_system),
+                            ] {
+                                if small(ui, icon, label, true, pref == p).clicked() {
+                                    ui.ctx().set_theme(p);
+                                }
+                            }
+                        });
+                        column(ui, |ui| {
+                            for l in Lang::ALL {
+                                if small(ui, Icon::Globe, l.native_name(), true, i18n::lang() == l).clicked()
+                                {
+                                    i18n::set_lang(l);
+                                }
+                            }
+                        });
+                    });
+                }
+                Tab::Help => {
+                    group(ui, t.grp_help, |ui| {
+                        if big(ui, Icon::Info, t.about, true, false).clicked() {
+                            cmds.push(Command::About);
+                        }
+                        if big(ui, Icon::Keyboard, t.shortcuts, true, false).clicked() {
+                            cmds.push(Command::Shortcuts);
+                        }
+                        if big(ui, Icon::Log, t.log_folder, true, false).clicked() {
+                            cmds.push(Command::LogFolder);
+                        }
+                    });
                 }
             });
         });
         ui.add_space(2.0);
+        cmds
+    }
+
+    /// The line with the path field below the menu band.
+    fn address_bar(&mut self, ui: &mut egui::Ui) -> Vec<Command> {
+        let t = tr();
+        let mut cmds = Vec::new();
+        ui.horizontal(|ui| {
+            let field = egui::TextEdit::singleline(&mut self.path_text)
+                .hint_text(t.path_hint)
+                .desired_width((ui.available_width() - 260.0).max(200.0));
+            let resp = ui.add(field);
+            let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            let busy = self.running.is_some();
+            if !busy && (ui.button(t.scan).clicked() || enter) && !self.path_text.trim().is_empty() {
+                cmds.push(Command::Scan(PathBuf::from(self.path_text.trim())));
+            }
+            if self.admin_tree && self.tree.is_some() {
+                ui.label(
+                    egui::RichText::new(format!("🛡 {}", t.admin_badge))
+                        .color(egui::Color32::from_rgb(139, 92, 246)),
+                );
+            }
+        });
+        ui.add_space(3.0);
+        cmds
+    }
+
+    fn command(&mut self, cmd: Command, ctx: &egui::Context) {
+        match cmd {
+            Command::Scan(path) => {
+                self.path_text = path.display().to_string();
+                self.start_scan(path);
+            }
+            Command::ChooseFolder => {
+                if let Some(dir) = rfd::FileDialog::new().pick_folder() {
+                    self.command(Command::Scan(dir), ctx);
+                }
+            }
+            Command::Rescan => {
+                let path = self.tree.as_ref().map(|t| t.root_path.clone());
+                let path = path.or_else(|| {
+                    (!self.path_text.trim().is_empty()).then(|| PathBuf::from(self.path_text.trim()))
+                });
+                if let Some(p) = path {
+                    self.command(Command::Scan(p), ctx);
+                }
+            }
+            Command::Cancel => {
+                if let Some(r) = self.running.take() {
+                    r.progress.cancel();
+                    if r.admin {
+                        // The helper cannot be stopped from here; its result is ignored.
+                        self.notice = Some((tr().admin_cancelled.to_string(), Instant::now()));
+                    } else {
+                        self.running = Some(r);
+                    }
+                }
+            }
+            Command::AdminScan => {
+                let path = self.tree.as_ref().map(|t| t.root_path.clone());
+                let path = path.or_else(|| {
+                    (!self.path_text.trim().is_empty()).then(|| PathBuf::from(self.path_text.trim()))
+                });
+                if let Some(p) = path {
+                    self.start(p, true);
+                }
+            }
+            Command::FullDiskAccess => self.show_full_access = true,
+            Command::ExportCsv => self.export_csv(),
+            Command::ExpandAll => {
+                if let Some(tree) = &self.tree {
+                    let start = self.selected.unwrap_or(ROOT);
+                    let mut stack = vec![start];
+                    // A limit keeps huge trees usable.
+                    while let Some(id) = stack.pop()
+                        && self.expanded.len() < 20_000
+                    {
+                        if tree.node(id).is_dir() {
+                            self.expanded.insert(id);
+                            stack.extend_from_slice(tree.children(id));
+                        }
+                    }
+                }
+            }
+            Command::CollapseAll => {
+                self.expanded.clear();
+                self.expanded.insert(ROOT);
+                self.selected = Some(ROOT);
+            }
+            Command::LogFolder => {
+                if let Some(dir) = applog::log_dir() {
+                    let _ = std::fs::create_dir_all(&dir);
+                    if let Err(e) = external::open_folder(&dir) {
+                        self.show_error(format!("{}\n{}", applog::private(&dir), format::io_error(&e)));
+                    }
+                }
+            }
+            Command::About => self.show_about = true,
+            Command::Shortcuts => self.show_shortcuts = true,
+            Command::SearchView => self.view = View::Search,
+            Command::Node(action) => self.apply(action, ctx),
+        }
+    }
+
+    /// The small windows: about, shortcuts, Full Disk Access. All can be moved.
+    fn dialogs(&mut self, ctx: &egui::Context) {
+        let t = tr();
+        let center = ctx.content_rect().center();
+        if self.show_about {
+            egui::Window::new(t.about)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .default_pos(center)
+                .open(&mut self.show_about)
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.heading(format!("MrSizeMe {}", env!("CARGO_PKG_VERSION")));
+                    ui.add_space(4.0);
+                    ui.label(t.about_text);
+                });
+        }
+        if self.show_shortcuts {
+            egui::Window::new(t.shortcuts)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .default_pos(center)
+                .open(&mut self.show_shortcuts)
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    egui::Grid::new("shortcut_grid").num_columns(2).striped(true).show(ui, |ui| {
+                        for (keys, what) in t.shortcut_list {
+                            let keys = if cfg!(target_os = "macos") {
+                                keys.replace("Strg", "⌘").replace("Ctrl", "⌘")
+                            } else {
+                                keys.to_string()
+                            };
+                            ui.strong(keys);
+                            ui.label(what);
+                            ui.end_row();
+                        }
+                    });
+                });
+        }
+        if self.show_full_access {
+            let mut open = true;
+            let mut error = None;
+            egui::Window::new(t.fda_title)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .default_pos(center)
+                .open(&mut open)
+                .collapsible(false)
+                .default_width(460.0)
+                .show(ctx, |ui| {
+                    ui.label(t.fda_intro);
+                    ui.add_space(6.0);
+                    ui.label(t.fda_steps);
+                    ui.add_space(6.0);
+                    let status = match crate::elevate::has_full_disk_access() {
+                        Some(true) => t.fda_status_yes,
+                        Some(false) => t.fda_status_no,
+                        None => t.fda_status_unknown,
+                    };
+                    ui.strong(status);
+                    if ui.button(t.fda_open_settings).clicked()
+                        && let Err(e) = external::open_full_disk_access_settings()
+                    {
+                        error = Some(format::io_error(&e));
+                    }
+                });
+            self.show_full_access = open;
+            if let Some(e) = error {
+                self.show_error(e);
+            }
+        }
+    }
+
+    /// Shortcuts that work everywhere (unless a text field has the keyboard).
+    fn global_keys(&self, ctx: &egui::Context) -> Vec<Command> {
+        let mut cmds = Vec::new();
+        let typing = ctx.egui_wants_keyboard_input();
+        ctx.input_mut(|i| {
+            use egui::{Key, KeyboardShortcut, Modifiers};
+            let cmd = |key| KeyboardShortcut::new(Modifiers::COMMAND, key);
+            if i.consume_shortcut(&cmd(Key::O)) {
+                cmds.push(Command::ChooseFolder);
+            }
+            if i.consume_shortcut(&cmd(Key::E)) {
+                cmds.push(Command::ExportCsv);
+            }
+            if i.consume_shortcut(&cmd(Key::F)) {
+                cmds.push(Command::SearchView);
+            }
+            if i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::C))
+                && let Some(id) = self.selected
+            {
+                cmds.push(Command::Node(Action::CopyPath(id)));
+            }
+            if i.key_pressed(Key::F5) && self.running.is_none() {
+                cmds.push(Command::Rescan);
+            }
+            if i.key_pressed(Key::Escape) && self.running.is_some() {
+                cmds.push(Command::Cancel);
+            }
+            if !typing
+                && i.key_pressed(Key::Backspace)
+                && let Some(tree) = &self.tree
+            {
+                let parent = tree.node(self.map_root).parent;
+                if parent != crate::tree::NO_PARENT {
+                    cmds.push(Command::Node(Action::MapRoot(parent)));
+                }
+            }
+        });
+        cmds
     }
 
     fn status(&mut self, ui: &mut egui::Ui) {
         let t = tr();
         ui.horizontal(|ui| {
-            if let Some(r) = &self.running {
+            if let Some(r) = &self.running
+                && r.admin
+            {
+                ui.spinner();
+                ui.label(format!("{}  {}", t.admin_scanning, r.root.display()));
+            } else if let Some(r) = &self.running {
                 ui.spinner();
                 let p = &r.progress;
                 ui.label(format!(
@@ -529,6 +943,8 @@ impl App {
         let mut open = true;
         let mut close = false;
         egui::Window::new(t.error_title)
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(ctx.content_rect().center())
             .id(egui::Id::unique("error_window"))
             .open(&mut open)
             .collapsible(false)
@@ -572,8 +988,10 @@ impl App {
         self.poll_scan(&ctx);
         self.update_title(&ctx);
         let mut actions = self.keyboard(&ctx);
+        let mut cmds = self.global_keys(&ctx);
 
-        Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
+        cmds.extend(Panel::top("ribbon").show(ui, |ui| self.ribbon(ui)).inner);
+        cmds.extend(Panel::top("address").show(ui, |ui| self.address_bar(ui)).inner);
         Panel::bottom("status").show(ui, |ui| self.status(ui));
         if self.tree.is_some() {
             let width = ui.available_width() * 0.5;
@@ -591,9 +1009,13 @@ impl App {
                 paint::welcome(ui, self.running.is_some());
             }
         });
+        self.dialogs(&ctx);
         self.error_window(&ctx);
         for a in actions {
             self.apply(a, &ctx);
+        }
+        for c in cmds {
+            self.command(c, &ctx);
         }
     }
 

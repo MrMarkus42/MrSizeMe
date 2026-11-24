@@ -40,6 +40,25 @@ pub fn open_folder(path: &Path) -> std::io::Result<Outcome> {
     Ok(Outcome::Done)
 }
 
+/// macOS: opens System Settings at "Privacy & Security → Full Disk Access".
+pub fn open_full_disk_access_settings() -> std::io::Result<Outcome> {
+    if is_blocked() {
+        log::info!("outside action blocked (test mode): open system settings");
+        return Ok(Outcome::Blocked);
+    }
+    if !cfg!(target_os = "macos") {
+        return Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "only on macOS"));
+    }
+    let mut child = std::process::Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    std::thread::spawn(move || child.wait());
+    Ok(Outcome::Done)
+}
+
 #[cfg(windows)]
 mod imp {
     use std::os::windows::ffi::OsStrExt;
