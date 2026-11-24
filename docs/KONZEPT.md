@@ -1,0 +1,138 @@
+# MrSizeMe – Konzept
+
+Stand: 24.11.2026. Vereinbart im Gespräch vor Beginn der Programmierung.
+
+MrSizeMe zeigt, welche Ordner und Dateien den Platz auf den Laufwerken
+belegen, und hilft sicher beim Aufräumen. Es ist in Rust geschrieben
+(Oberfläche: egui/eframe) und läuft unter Windows, macOS und Linux.
+
+## Grundsätze
+
+* **Plattformen:** Windows und macOS haben Vorrang, Linux läuft mit.
+* **Sprachen:** Deutsch und Englisch. Die Sprache folgt dem System und ist in
+  den Einstellungen umstellbar. Alle Texte stehen in Sprachdateien.
+* **Sicherheit:** Nur Metadaten werden gelesen (Name, Größe, Datum), nie der
+  Inhalt einer Datei – Ausnahme: Prüfsummen für die Duplikatsuche. Hohe
+  Rechte bekommt nur ein kleiner Scan-Teil, nie die ganze Oberfläche.
+  Gelöscht wird nur in den Papierkorb und nur nach Bestätigung;
+  Systemordner sind gesperrt.
+* **Datenschutz:** Nichts verlässt den Rechner ohne Zustimmung. Ins Netz geht
+  höchstens ein Ordnername mit Größe und Betriebssystem, nie ein voller Pfad
+  oder der Benutzername. Ein Schalter „Komplett offline“ sperrt alles, was
+  ins Netz geht.
+* **Version 1 enthält alles unten Beschriebene.** Intern wird in Etappen
+  gebaut (siehe Ende); veröffentlicht wird erst, wenn alles fertig und
+  geprüft ist.
+
+## 1. Scannen
+
+* Paralleles Lesen der Ordner; Verknüpfungen und Junctions werden nie
+  verfolgt; Hardlinks zählen nur einmal.
+* Zwei Größen: Dateigröße und tatsächlich belegter Platz (komprimierte,
+  dünn belegte und Cloud-Dateien).
+* Abbrechen jederzeit; Fortschritt mit Anzahl, Datenmenge und aktuellem Ordner.
+* Mehrere Laufwerke und Ordner, auch Netzlaufwerke und NAS.
+* **Live-Aktualisierung:** Nach dem Scan beobachtet das Programm Änderungen
+  und passt die Zahlen an, ohne neu zu scannen.
+* **Admin-Modus**
+  * Windows: Knopf „Als Administrator neu starten“; als Admin wird das
+    Sicherungsrecht genutzt (auch geschützte Ordner sichtbar). Schnell-Scan
+    über das NTFS-Inhaltsverzeichnis (MFT), wenn Admin-Rechte vorhanden sind.
+  * macOS: Erkennen, ob „Festplattenvollzugriff“ fehlt, und Schritt für
+    Schritt zeigen, wo man ihn einschaltet.
+  * Linux: kleines Scan-Hilfsprogramm, das über die Systemabfrage (pkexec)
+    mit root-Rechten läuft; die Oberfläche bleibt beim normalen Benutzer.
+
+## 2. Ansichten
+
+Umschaltbar nach Größe, belegtem Platz oder Anzahl Dateien.
+
+* **Ordnerbaum** mit Balken, Prozent, Dateien, Ordnern, Datum (Hauptansicht).
+* **Kachelkarte:** große Dateien = große Flächen, Farben nach Dateiart.
+* **Ringdiagramm:** Ordner als Ringe von innen nach außen.
+* **Dateitypen** und **Kategorien:** Videos, Bilder, Musik, Dokumente,
+  Programme, Spiele (z. B. Spielebibliotheken), virtuelle Maschinen,
+  Entwickler-Dateien, Caches.
+* **Größte Dateien, älteste Dateien, Altersverteilung.**
+* **Programme-Ansicht:** Platz pro Programm = Programm + Daten + Caches
+  (auf dem Mac besonders unter `~/Library`).
+* **Cloud-Dateien:** OneDrive/iCloud – was nur online liegt und was lokal
+  Platz belegt; Knopf „Nur online behalten“.
+* **Suche und Filter**, z. B. „Videos über 1 GB, älter als 2 Jahre“.
+* **Doppelte Dateien** (erst Größe, dann Prüfsumme).
+
+## 3. Aufräumhilfe
+
+* **Aufräum-Vorschläge auf einen Blick:** „Hier könnten Sie ca. 23 GB
+  sparen“ – Caches, alte Installer, Duplikate, Entwickler-Reste, Papierkorb.
+* **„Was ist das? Darf das weg?“** per Rechtsklick auf Ordner oder Datei:
+  * **Eingebautes Wissen (offline):** geprüfte Liste bekannter Ordner
+    (z. B. WinSxS, hiberfil.sys, pagefile.sys, Windows.old, Papierkorb,
+    Docker, node_modules, Library/Caches, Xcode-Daten, iPhone-Backups,
+    lokale Time-Machine-Schnappschüsse). Ampel: grün = darf weg,
+    gelb = mit Werkzeug aufräumen, rot = nicht anfassen. Dazu der richtige
+    Weg (z. B. Windows-Bereinigung statt Löschen von Hand).
+  * **KI fragen** (nur auf Wunsch, mit Rückfrage, alle Varianten wählbar):
+    lokale KI (Ollama), Cloud-KI mit eigenem Schlüssel (Gemini, Claude),
+    Google-KI-Modus bzw. Google-Suche im Browser. Immer mit Hinweis, dass die
+    KI sich irren kann. Die KI löscht nie selbst.
+* **Löschen** nur in den Papierkorb, mit Bestätigung; Systemordner gesperrt.
+* **Verschieben-Assistent:** große Ordner auf eine andere Platte verschieben,
+  auf Wunsch mit Verknüpfung am alten Ort.
+
+## 4. Verlauf und Vergleich
+
+* Scans speichern (nur Zahlen und Namen, lokal).
+* **Vergleich:** „Seit letzter Woche ist Downloads um 12 GB gewachsen“.
+* **Prognose:** „Bei diesem Tempo ist C: in etwa 4 Monaten voll“.
+* **Warnung bei fast voller Platte** (optional, z. B. unter 10 % frei).
+
+## 5. Oberfläche
+
+* Modernes Aussehen, hell und dunkel, eigene einheitliche Symbole.
+* Dialoge und Werkzeugfenster als echte, verschiebbare Fenster (auch auf
+  einen zweiten Bildschirm).
+* Fehlermeldungen markierbar und kopierbar (Knopf + Strg+C), vollständig im
+  Protokoll.
+* Volle Tastaturbedienung, Unterstützung für Bildschirmleser.
+* Rechtsklick im Explorer bzw. Finder „Mit MrSizeMe analysieren“
+  (nur nach Zustimmung, da es das System ändert).
+
+## 6. Export
+
+CSV, Excel-taugliche Datei, HTML-Bericht; Kommandozeilen-Modus (auch JSON).
+
+## 7. Updates
+
+Einstellbar: nie suchen / fragen / automatisch suchen, mit Häufigkeit.
+Das Programm fragt beim ersten Start, ob es überhaupt suchen darf. Updates
+sind mit minisign signiert; der öffentliche Schlüssel ist eingebaut.
+
+## 8. Lieferformen
+
+* Windows: Installer und portable Version (ohne Installation, z. B. USB-Stick).
+* macOS: .dmg.
+* Linux: Archiv (später ggf. weitere Pakete).
+* Zu jedem Download eine SHA-256-Prüfsummendatei.
+
+## Etappen (intern)
+
+| Nr. | Inhalt | Stand |
+| --- | --- | --- |
+| 1 | Scanner-Kern, Baumstruktur, Tests | fertig (24.11.) |
+| 2 | Oberfläche: Ordnerbaum, Kachelkarte, Dateitypen, Sprachen, Icon | erste Fassung (24.11.); Icon-Auswahl, Feinschliff offen |
+| 3 | Weitere Ansichten: Ring, Kategorien, Größte/Älteste, Alter, Filter | offen |
+| 4 | Admin-Modus (Windows, macOS, Linux), MFT-Schnell-Scan | offen |
+| 5 | Aufräumhilfe: Wissensliste, Papierkorb, Vorschläge, KI | offen |
+| 6 | Verlauf, Vergleich, Prognose, Warnung, Live-Aktualisierung | offen |
+| 7 | Duplikate, Programme-Ansicht, Cloud-Dateien, Verschieben | offen |
+| 8 | Export, Kommandozeile, Kontextmenü im Explorer/Finder | offen |
+| 9 | Updates, Installer, portable Version, .dmg, Website | offen |
+
+## Arbeitsweise
+
+* Gebaut und getestet wird auf dem Linux-Rechner. Auf dem Windows-PC werden
+  keine selbst gebauten Programme gestartet. Windows und macOS werden über
+  GitHub Actions (nur nach Rückfrage) oder durch Tests des Nutzers geprüft.
+* Abhängigkeiten: neueste Versionen, aber mindestens 14 Tage alt;
+  Lock-Datei wird eingecheckt; nur freie Lizenzen.

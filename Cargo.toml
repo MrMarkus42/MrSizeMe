@@ -1,0 +1,45 @@
+[package]
+name = "mrsizeme"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "MrSizeMe - shows which folders and files use the space on your disks"
+license = "MIT OR Apache-2.0"
+authors = ["Mr. M <mr.m@users.noreply.github.com>"]
+readme = "README.md"
+keywords = ["disk", "usage", "treemap", "folder", "size"]
+categories = ["filesystem", "gui"]
+
+[lib]
+name = "mrsizeme"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mrsizeme"
+path = "src/main.rs"
+
+[dependencies]
+eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
+# The symbol fonts (▸ ▾ ⚠ …): no longer bundled by default since 0.37.
+egui = { version = "=0.37.0", features = ["monochrome_emoji_fonts"] }
+egui_extras = { version = "=0.37.0", default-features = false }
+rfd = "=0.17.2"
+log = "0.4"
+# Language of the operating system (for the default language).
+sys-locale = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+egui_kittest = { version = "=0.37.0", features = ["eframe"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

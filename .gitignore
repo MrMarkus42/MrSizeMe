@@ -1,0 +1,8 @@
+/target
+/dist/
+# Private working notes, not part of the repository.
+/docs/privat/
+# Signing keys never belong into the repository.
+*.key
+# Preview page with the icon drafts embedded (large, generated).
+/assets/icon-entwuerfe/vergleich.html
