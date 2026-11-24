@@ -6,3 +6,4 @@
 *.key
 # Preview page with the icon drafts embedded (large, generated).
 /assets/icon-entwuerfe/vergleich.html
+/tools/make-icons/target

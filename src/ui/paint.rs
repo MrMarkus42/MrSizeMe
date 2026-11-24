@@ -16,10 +16,28 @@ pub fn type_color(ext: &str, dark: bool) -> Color32 {
     for b in ext.bytes() {
         h = (h ^ u32::from(b)).wrapping_mul(0x0100_0193);
     }
-    let hue = (h % 360) as f32 / 360.0;
-    let sat = 0.45 + ((h >> 9) % 30) as f32 / 100.0;
-    let val = if dark { 0.70 } else { 0.86 };
-    egui::ecolor::Hsva::new(hue, sat, val, 1.0).into()
+    let hue = (h % 360) as f32;
+    let sat = 0.42 + ((h >> 9) % 20) as f32 / 100.0;
+    let val = if dark { 0.78 } else { 0.88 };
+    hsv(hue, sat, val)
+}
+
+/// HSV in screen colours (sRGB); hue in degrees. egui's own `Hsva` works in
+/// linear light, which makes such colours look washed out.
+fn hsv(hue: f32, sat: f32, val: f32) -> Color32 {
+    let c = val * sat;
+    let x = c * (1.0 - ((hue / 60.0) % 2.0 - 1.0).abs());
+    let m = val - c;
+    let (r, g, b) = match (hue / 60.0) as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let to = |v: f32| ((v + m) * 255.0).round().clamp(0.0, 255.0) as u8;
+    Color32::from_rgb(to(r), to(g), to(b))
 }
 
 /// Colour of the share bars by depth (soft blue tones).
@@ -110,4 +128,18 @@ pub fn welcome(ui: &mut egui::Ui, busy: bool) {
             ui.label(egui::RichText::new(tr().welcome).size(16.0).weak());
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hsv_primaries() {
+        assert_eq!(hsv(0.0, 1.0, 1.0), Color32::from_rgb(255, 0, 0));
+        assert_eq!(hsv(120.0, 1.0, 1.0), Color32::from_rgb(0, 255, 0));
+        assert_eq!(hsv(240.0, 1.0, 1.0), Color32::from_rgb(0, 0, 255));
+        assert_eq!(hsv(0.0, 0.0, 0.5), Color32::from_rgb(128, 128, 128));
+        assert_eq!(type_color("jpg", true), type_color("jpg", true));
+    }
 }

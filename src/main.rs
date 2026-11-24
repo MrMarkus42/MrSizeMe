@@ -26,14 +26,16 @@ fn main() -> ExitCode {
     applog::init();
     log::info!("MrSizeMe {} started", env!("CARGO_PKG_VERSION"));
     let start = args.first().map(PathBuf::from);
-    let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("MrSizeMe")
-            .with_app_id("mrsizeme")
-            .with_inner_size([1280.0, 800.0])
-            .with_min_inner_size([720.0, 420.0]),
-        ..Default::default()
-    };
+    let mut viewport = eframe::egui::ViewportBuilder::default()
+        .with_title("MrSizeMe")
+        .with_app_id("mrsizeme")
+        .with_inner_size([1280.0, 800.0])
+        .with_min_inner_size([720.0, 420.0]);
+    match eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon/mrsizeme-256.png")) {
+        Ok(icon) => viewport = viewport.with_icon(icon),
+        Err(e) => log::warn!("window icon could not be loaded: {e}"),
+    }
+    let options = eframe::NativeOptions { viewport, ..Default::default() };
     let result =
         eframe::run_native("MrSizeMe", options, Box::new(|_cc| Ok(Box::new(mrsizeme::ui::App::new(start)))));
     match result {

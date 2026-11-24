@@ -53,13 +53,16 @@ fn sample_tree() -> Tree {
 fn shot(dark: bool, lang: Lang, name: &str) {
     common::setup();
     i18n::set_lang(lang);
-    let mut h =
-        Harness::builder().with_size(egui::vec2(1400.0, 820.0)).with_max_steps(64).wgpu().build_eframe(
-            move |cc| {
-                cc.egui_ctx.set_theme(if dark { egui::Theme::Dark } else { egui::Theme::Light });
-                App::with_tree(sample_tree())
-            },
-        );
+    let theme = if dark { egui::Theme::Dark } else { egui::Theme::Light };
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1400.0, 820.0))
+        .with_max_steps(64)
+        .with_theme(theme)
+        .wgpu()
+        .build_eframe(move |cc| {
+            cc.egui_ctx.set_theme(theme);
+            App::with_tree(sample_tree())
+        });
     h.run();
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/ui-screenshots");
     std::fs::create_dir_all(&dir).unwrap();

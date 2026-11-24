@@ -1,0 +1,13 @@
+[package]
+name = "make-icons"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Renders assets/icon/mrsizeme.svg into the PNG, ICO and ICNS files of MrSizeMe"
+license = "MIT OR Apache-2.0"
+
+# Separate from the program: its dependencies never end up in MrSizeMe.
+[workspace]
+
+[dependencies]
+resvg = "0.49"
