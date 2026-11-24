@@ -7,3 +7,5 @@
 # Preview page with the icon drafts embedded (large, generated).
 /assets/icon-entwuerfe/vergleich.html
 /tools/make-icons/target
+# Machine-specific helper (contains the build host), never published.
+/tools/sync.sh
