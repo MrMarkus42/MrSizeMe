@@ -37,7 +37,9 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [dev-dependencies]
-egui_kittest = { version = "=0.37.0", features = ["eframe"] }
+egui_kittest = { version = "=0.37.0", features = ["eframe", "wgpu"] }
+# Saves the screenshots of the window tests.
+image = { version = "=0.25.10", default-features = false, features = ["png"] }
 
 [profile.release]
 lto = "thin"
