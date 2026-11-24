@@ -11,7 +11,10 @@ use mrsizeme::scan::{Options, Progress, scan};
 #[test]
 fn mft_scan_matches_the_normal_scan() {
     setup();
+    // On the CI machines the test must really run, not be skipped.
+    let on_ci = std::env::var_os("CI").is_some();
     if !mrsizeme::elevate::is_elevated() {
+        assert!(!on_ci, "CI runs without admin rights");
         eprintln!("skipped: no admin rights");
         return;
     }
@@ -28,6 +31,7 @@ fn mft_scan_matches_the_normal_scan() {
     let fast = match mrsizeme::mft::scan(t.path(), &Progress::default()) {
         Some(result) => result.expect("MFT scan failed"),
         None => {
+            assert!(!on_ci, "CI drive is not NTFS");
             eprintln!("skipped: drive is not NTFS");
             return;
         }
