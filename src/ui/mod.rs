@@ -5,6 +5,7 @@ mod lists;
 mod map;
 mod paint;
 mod places;
+mod ring;
 
 use std::collections::HashSet;
 use std::io;
@@ -17,18 +18,48 @@ use std::time::{Duration, Instant};
 use eframe::egui;
 use egui::{CentralPanel, Panel};
 
+use crate::category::CategoryStats;
 use crate::i18n::{self, Lang, tr};
+use crate::query::{AgeStats, Filter, Hits};
 use crate::scan::{self, Progress};
 use crate::stats::TypeStats;
-use crate::tree::{NodeId, ROOT, SortKey, Tree};
+use crate::tree::{Measure, NodeId, ROOT, SortKey, Tree};
 use crate::{applog, export, external, format};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Folders,
     Types,
+    Categories,
     Largest,
+    Oldest,
+    Age,
+    Search,
 }
+
+/// The chart on the right side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Chart {
+    Map,
+    Ring,
+}
+
+/// A computed list that stays valid while the tree and the start folder stay the same.
+struct Cached<T> {
+    generation: u64,
+    start: NodeId,
+    value: T,
+}
+
+fn refresh<T>(slot: &mut Option<Cached<T>>, generation: u64, start: NodeId, make: impl FnOnce() -> T) -> &T {
+    if !slot.as_ref().is_some_and(|c| c.generation == generation && c.start == start) {
+        *slot = Some(Cached { generation, start, value: make() });
+    }
+    &slot.as_ref().expect("filled above").value
+}
+
+/// How many files the file lists show at most.
+const LIST_LIMIT: usize = 1000;
 
 struct Running {
     progress: Arc<Progress>,
@@ -59,10 +90,20 @@ pub struct App {
     sort: (SortKey, bool),
     view: View,
     map_root: NodeId,
-    use_allocated: bool,
+    measure: Measure,
+    chart: Chart,
     map_cache: Option<map::Cache>,
-    types_cache: Option<(u64, NodeId, Vec<TypeStats>)>,
-    largest_cache: Option<(u64, NodeId, Vec<NodeId>)>,
+    ring_cache: Option<ring::Cache>,
+    types_cache: Option<Cached<Vec<TypeStats>>>,
+    categories_cache: Option<Cached<Vec<CategoryStats>>>,
+    largest_cache: Option<Cached<Vec<NodeId>>>,
+    oldest_cache: Option<Cached<Vec<NodeId>>>,
+    age_cache: Option<Cached<[AgeStats; 7]>>,
+    filter: Filter,
+    min_mb: f64,
+    /// Bumped when the search form changes, so the search runs again.
+    filter_generation: u64,
+    search_cache: Option<Cached<Hits>>,
     error: Option<String>,
     notice: Option<(String, Instant)>,
     scroll_to_selected: bool,
@@ -101,10 +142,19 @@ impl App {
             sort: (SortKey::Size, false),
             view: View::Folders,
             map_root: ROOT,
-            use_allocated: false,
+            measure: Measure::Size,
+            chart: Chart::Map,
             map_cache: None,
+            ring_cache: None,
             types_cache: None,
+            categories_cache: None,
             largest_cache: None,
+            oldest_cache: None,
+            age_cache: None,
+            filter: Filter::default(),
+            min_mb: 0.0,
+            filter_generation: 0,
+            search_cache: None,
             error: None,
             notice: None,
             scroll_to_selected: false,
@@ -122,9 +172,9 @@ impl App {
         self.expanded.clear();
         self.expanded.insert(ROOT);
         self.map_root = ROOT;
+        // The caches compare the generation, so they refresh by themselves.
         self.map_cache = None;
-        self.types_cache = None;
-        self.largest_cache = None;
+        self.ring_cache = None;
     }
 
     fn start_scan(&mut self, path: PathBuf) {
@@ -357,34 +407,82 @@ impl App {
 
     fn left(&mut self, ui: &mut egui::Ui) -> Vec<Action> {
         let t = tr();
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.view, View::Folders, t.view_folders);
-            ui.selectable_value(&mut self.view, View::Types, t.view_types);
-            ui.selectable_value(&mut self.view, View::Largest, t.view_largest);
+        ui.horizontal_wrapped(|ui| {
+            for (view, label) in [
+                (View::Folders, t.view_folders),
+                (View::Types, t.view_types),
+                (View::Categories, t.view_categories),
+                (View::Largest, t.view_largest),
+                (View::Oldest, t.view_oldest),
+                (View::Age, t.view_age),
+                (View::Search, t.view_search),
+            ] {
+                ui.selectable_value(&mut self.view, view, label);
+            }
         });
         ui.separator();
         let Some(tree) = &self.tree else { return Vec::new() };
         let start = self.selected.filter(|&s| tree.node(s).is_dir()).unwrap_or(ROOT);
+        let generation = self.generation;
         match self.view {
             View::Folders => {
                 let scroll = std::mem::take(&mut self.scroll_to_selected);
                 folders::show(ui, tree, &self.expanded, self.selected, self.sort, scroll)
             }
             View::Types => {
-                if self.types_cache.as_ref().is_none_or(|c| c.0 != self.generation || c.1 != start) {
-                    self.types_cache = Some((self.generation, start, crate::stats::by_type(tree, start)));
-                }
-                let stats = &self.types_cache.as_ref().map(|c| &c.2);
-                lists::types(ui, tree, start, stats.map_or(&[][..], |s| s.as_slice()));
+                let stats =
+                    refresh(&mut self.types_cache, generation, start, || crate::stats::by_type(tree, start));
+                lists::types(ui, tree, start, stats);
+                Vec::new()
+            }
+            View::Categories => {
+                let stats = refresh(&mut self.categories_cache, generation, start, || {
+                    crate::category::by_category(tree, start)
+                });
+                lists::categories(ui, tree, start, stats);
                 Vec::new()
             }
             View::Largest => {
-                if self.largest_cache.as_ref().is_none_or(|c| c.0 != self.generation || c.1 != start) {
-                    self.largest_cache =
-                        Some((self.generation, start, crate::stats::largest_files(tree, start, 500)));
-                }
-                let files = self.largest_cache.as_ref().map_or(&[][..], |c| c.2.as_slice());
+                let files = refresh(&mut self.largest_cache, generation, start, || {
+                    crate::stats::largest_files(tree, start, LIST_LIMIT)
+                });
                 lists::largest(ui, tree, files, self.selected)
+            }
+            View::Oldest => {
+                let files = refresh(&mut self.oldest_cache, generation, start, || {
+                    crate::query::oldest_files(tree, start, LIST_LIMIT)
+                });
+                lists::largest(ui, tree, files, self.selected)
+            }
+            View::Age => {
+                let stats = refresh(&mut self.age_cache, generation, start, || {
+                    crate::query::age_distribution(tree, start, crate::query::now())
+                });
+                lists::ages(ui, tree, start, stats);
+                Vec::new()
+            }
+            View::Search => {
+                ui.label(
+                    egui::RichText::new(format!("{} {}", t.in_folder, tree.path(start).display())).weak(),
+                );
+                if lists::search_form(ui, &mut self.filter, &mut self.min_mb) {
+                    self.filter_generation += 1;
+                }
+                // The search runs again when the tree or the form changes.
+                let key = generation.wrapping_mul(1_000_003).wrapping_add(self.filter_generation);
+                let filter = &self.filter;
+                let hits = refresh(&mut self.search_cache, key, start, || {
+                    crate::query::search(tree, start, filter, crate::query::now(), LIST_LIMIT)
+                });
+                ui.separator();
+                let mut line =
+                    format!("{} {}  ·  {}", format::count(hits.count), t.hits, format::size(hits.size));
+                if hits.count > hits.files.len() as u64 {
+                    line +=
+                        &format!("  ·  {}", t.shown_first.replace("{n}", &format::count(LIST_LIMIT as u64)));
+                }
+                ui.strong(line);
+                lists::largest(ui, tree, &hits.files, self.selected)
             }
         }
     }
@@ -504,27 +602,28 @@ impl App {
         let Some(tree) = &self.tree else { return Vec::new() };
         let mut actions = Vec::new();
         ui.horizontal(|ui| {
-            ui.strong(t.map_title);
+            ui.selectable_value(&mut self.chart, Chart::Map, t.map_title);
+            ui.selectable_value(&mut self.chart, Chart::Ring, t.ring_title);
+            ui.separator();
+            ui.selectable_value(&mut self.measure, Measure::Size, t.show_size);
+            ui.selectable_value(&mut self.measure, Measure::Allocated, t.show_allocated);
+            ui.selectable_value(&mut self.measure, Measure::Files, t.show_count);
+            ui.separator();
             let parent = tree.node(self.map_root).parent;
             if ui.add_enabled(parent != crate::tree::NO_PARENT, egui::Button::new(t.map_up)).clicked() {
                 actions.push(Action::MapRoot(parent));
             }
-            ui.selectable_value(&mut self.use_allocated, false, t.show_size);
-            ui.selectable_value(&mut self.use_allocated, true, t.show_allocated);
             ui.add(
                 egui::Label::new(egui::RichText::new(tree.path(self.map_root).display().to_string()).weak())
                     .truncate(),
             );
         });
-        actions.extend(map::show(
-            ui,
-            tree,
-            self.map_root,
-            self.selected,
-            self.use_allocated,
-            self.generation,
-            &mut self.map_cache,
-        ));
+        let (root, selected, measure, generation) =
+            (self.map_root, self.selected, self.measure, self.generation);
+        actions.extend(match self.chart {
+            Chart::Map => map::show(ui, tree, root, selected, measure, generation, &mut self.map_cache),
+            Chart::Ring => ring::show(ui, tree, root, selected, measure, generation, &mut self.ring_cache),
+        });
         actions
     }
 }

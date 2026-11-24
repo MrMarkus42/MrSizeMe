@@ -75,3 +75,48 @@ fn sort_by_name_and_language_switch() {
     assert!(h.query_by_label("File types").is_some());
     i18n::set_lang(Lang::De);
 }
+
+#[test]
+fn categories_age_search_and_ring_chart() {
+    let _guard = lock();
+    let t = sample();
+    let mut h = harness(&t);
+
+    h.get_by_label("Kategorien").click();
+    h.run();
+    // Below a temp folder ("tmp", "Temp") everything counts as temporary.
+    let temp_root = t.path().components().any(|c| {
+        mrsizeme::category::Category::of_folder(&c.as_os_str().to_string_lossy())
+            == Some(mrsizeme::category::Category::Caches)
+    });
+    if temp_root {
+        assert!(h.query_by_label("Caches & Temporäres").is_some());
+    } else {
+        assert!(h.query_by_label("Bilder").is_some());
+        assert!(h.query_by_label("Dokumente").is_some());
+    }
+
+    h.get_by_label("Alter").click();
+    h.run();
+    // The sample files were just written.
+    assert!(h.query_by_label("Jünger als 1 Monat").is_some());
+
+    h.get_by_label("Älteste").click();
+    h.run();
+    assert!(h.query_by_label("notiz.txt").is_some());
+
+    h.get_by_label("Suche").click();
+    h.run();
+    assert!(h.query_by_label_contains("4 Treffer").is_some());
+
+    // Both charts, with every measure.
+    h.get_by_label("Ringdiagramm").click();
+    h.run();
+    for measure in ["Anzahl", "Belegt", "Größe"] {
+        // Column headings share these names; the chart buttons come last.
+        h.get_all_by_label(measure).last().unwrap().click();
+        h.run();
+    }
+    h.get_by_label("Kachelkarte").click();
+    h.run();
+}

@@ -101,6 +101,17 @@ pub enum SortKey {
     Modified,
 }
 
+/// What the charts measure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Measure {
+    /// Logical size.
+    Size,
+    /// Space used on the disk.
+    Allocated,
+    /// Number of files.
+    Files,
+}
+
 #[derive(Debug, Clone)]
 pub struct Tree {
     pub nodes: Vec<Node>,
@@ -142,6 +153,26 @@ impl Tree {
 
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
+    }
+
+    /// The value of a node in the charts. A further hard link counts 0, as
+    /// in the sums, so the parts always add up to the whole.
+    pub fn value(&self, id: NodeId, m: Measure) -> u64 {
+        let n = self.node(id);
+        if n.has(flags::HARDLINK_DUP) {
+            return 0;
+        }
+        match m {
+            Measure::Size => n.size,
+            Measure::Allocated => n.allocated,
+            Measure::Files => {
+                if n.is_dir() {
+                    n.files
+                } else {
+                    1
+                }
+            }
+        }
     }
 
     /// Children of a node in display order.

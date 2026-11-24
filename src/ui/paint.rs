@@ -24,7 +24,7 @@ pub fn type_color(ext: &str, dark: bool) -> Color32 {
 
 /// HSV in screen colours (sRGB); hue in degrees. egui's own `Hsva` works in
 /// linear light, which makes such colours look washed out.
-fn hsv(hue: f32, sat: f32, val: f32) -> Color32 {
+pub(crate) fn hsv(hue: f32, sat: f32, val: f32) -> Color32 {
     let c = val * sat;
     let x = c * (1.0 - ((hue / 60.0) % 2.0 - 1.0).abs());
     let m = val - c;

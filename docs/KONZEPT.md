@@ -121,7 +121,7 @@ sind mit minisign signiert; der öffentliche Schlüssel ist eingebaut.
 | --- | --- | --- |
 | 1 | Scanner-Kern, Baumstruktur, Tests | fertig (24.11.) |
 | 2 | Oberfläche: Ordnerbaum, Kachelkarte, Dateitypen, Sprachen, Icon | erste Fassung (24.11.); Icon-Auswahl, Feinschliff offen |
-| 3 | Weitere Ansichten: Ring, Kategorien, Größte/Älteste, Alter, Filter | offen |
+| 3 | Weitere Ansichten: Ring, Kategorien, Größte/Älteste, Alter, Filter | fertig (24.11.) |
 | 4 | Admin-Modus (Windows, macOS, Linux), MFT-Schnell-Scan | offen |
 | 5 | Aufräumhilfe: Wissensliste, Papierkorb, Vorschläge, KI | offen |
 | 6 | Verlauf, Vergleich, Prognose, Warnung, Live-Aktualisierung | offen |

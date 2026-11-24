@@ -9,7 +9,7 @@ use super::Action;
 use super::paint;
 use crate::format;
 use crate::stats::extension;
-use crate::tree::{NodeId, Tree};
+use crate::tree::{Measure, NodeId, Tree};
 use crate::treemap::{self, Rect as TRect};
 
 /// At most this many tiles are drawn (keeps big disks fluid).
@@ -26,7 +26,7 @@ pub struct Tile {
 }
 
 pub struct Cache {
-    key: (u64, NodeId, bool, [i32; 4]),
+    key: (u64, NodeId, Measure, [i32; 4]),
     tiles: Vec<Tile>,
 }
 
@@ -34,12 +34,17 @@ fn to_egui(r: TRect) -> Rect {
     Rect::from_min_size(pos2(r.x, r.y), egui::vec2(r.w, r.h))
 }
 
+/// A value as text: a size, or a number of files.
+pub fn value_text(v: u64, measure: Measure) -> String {
+    match measure {
+        Measure::Files => format!("{} {}", format::count(v), crate::i18n::tr().files),
+        Measure::Size | Measure::Allocated => format::size(v),
+    }
+}
+
 /// Lays out the tiles of `root` in `area`.
-pub fn build(tree: &Tree, root: NodeId, area: Rect, allocated: bool) -> Vec<Tile> {
-    let value = |id: NodeId| {
-        let n = tree.node(id);
-        if allocated { n.allocated } else { n.size }
-    };
+pub fn build(tree: &Tree, root: NodeId, area: Rect, measure: Measure) -> Vec<Tile> {
+    let value = |id: NodeId| tree.value(id, measure);
     let mut tiles = Vec::new();
     let mut stack = vec![(root, TRect::new(area.min.x, area.min.y, area.width(), area.height()), 0u16)];
     while let Some((id, r, depth)) = stack.pop() {
@@ -95,7 +100,7 @@ pub fn show(
     tree: &Tree,
     root: NodeId,
     selected: Option<NodeId>,
-    allocated: bool,
+    measure: Measure,
     generation: u64,
     cache: &mut Option<Cache>,
 ) -> Vec<Action> {
@@ -107,11 +112,11 @@ pub fn show(
     let key = (
         generation,
         root,
-        allocated,
+        measure,
         [area.min.x as i32, area.min.y as i32, area.width() as i32, area.height() as i32],
     );
     if cache.as_ref().is_none_or(|c| c.key != key) {
-        *cache = Some(Cache { key, tiles: build(tree, root, area, allocated) });
+        *cache = Some(Cache { key, tiles: build(tree, root, area, measure) });
     }
     let Some(cache) = cache.as_ref() else { return actions };
     let tiles = &cache.tiles;
@@ -140,8 +145,7 @@ pub fn show(
         let n = tree.node(tile.id);
         if tile.header {
             let pos = tile.rect.left_top() + egui::vec2(4.0, 1.5);
-            let text =
-                format!("{}  {}", n.name_lossy(), format::size(if allocated { n.allocated } else { n.size }));
+            let text = format!("{}  {}", n.name_lossy(), value_text(tree.value(tile.id, measure), measure));
             let galley = painter.layout_no_wrap(text, egui::FontId::proportional(11.0), text_color);
             let clip = Rect::from_min_size(tile.rect.min, egui::vec2(tile.rect.width() - 4.0, HEADER));
             painter.with_clip_rect(clip.intersect(area)).galley(pos, galley, text_color);
@@ -221,7 +225,7 @@ mod tests {
         t.add_children(first, [file("b", 500), file("c", 200), file("empty", 0)]);
         t.sum_up();
         let area = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(400.0, 300.0));
-        let tiles = build(&t, ROOT, area, false);
+        let tiles = build(&t, ROOT, area, Measure::Size);
         // root, d, b, c, a – the empty file gets no tile.
         assert_eq!(tiles.len(), 5);
         assert_eq!(tiles[0].id, ROOT);

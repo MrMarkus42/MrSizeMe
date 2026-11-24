@@ -14,7 +14,9 @@ up safely. It runs on Windows, macOS and Linux and speaks German and English.
 * Size and space on disk (compressed, sparse and cloud files on Windows).
 * Folder tree with share bars, sorting, keyboard navigation.
 * Tile map with folder frames; double-click zooms into a folder.
-* File types and the 500 largest files of a folder.
+* Ring chart; size, space on disk or number of files.
+* File types, categories, largest and oldest files, age distribution.
+* Search by name pattern, category, minimum size and age.
 * CSV export (safe against formula injection in spreadsheets).
 * German and English, light and dark mode.
 

@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use eframe::egui;
 use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
 use mrsizeme::i18n::{self, Lang};
 use mrsizeme::tree::{Kind, NO_PARENT, Node, NodeId, ROOT, Tree};
 use mrsizeme::ui::App;
@@ -50,7 +51,7 @@ fn sample_tree() -> Tree {
     tree
 }
 
-fn shot(dark: bool, lang: Lang, name: &str) {
+fn shot(dark: bool, lang: Lang, name: &str, clicks: &[&str]) {
     common::setup();
     i18n::set_lang(lang);
     let theme = if dark { egui::Theme::Dark } else { egui::Theme::Light };
@@ -64,6 +65,10 @@ fn shot(dark: bool, lang: Lang, name: &str) {
             App::with_tree(sample_tree())
         });
     h.run();
+    for label in clicks {
+        h.get_all_by_label(label).next().unwrap_or_else(|| panic!("no {label}")).click();
+        h.run();
+    }
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/ui-screenshots");
     std::fs::create_dir_all(&dir).unwrap();
     match h.render() {
@@ -75,7 +80,10 @@ fn shot(dark: bool, lang: Lang, name: &str) {
 #[test]
 #[ignore]
 fn screenshots() {
-    shot(true, Lang::De, "hauptfenster-dunkel");
-    shot(false, Lang::De, "hauptfenster-hell");
-    shot(false, Lang::En, "main-window-light-en");
+    shot(true, Lang::De, "hauptfenster-dunkel", &[]);
+    shot(true, Lang::De, "ring-kategorien-dunkel", &["Ringdiagramm", "Kategorien"]);
+    shot(false, Lang::De, "ring-alter-hell", &["Ringdiagramm", "Alter"]);
+    shot(false, Lang::De, "suche-hell", &["Suche"]);
+    shot(false, Lang::De, "hauptfenster-hell", &[]);
+    shot(false, Lang::En, "main-window-light-en", &["Ring chart", "Categories"]);
 }
