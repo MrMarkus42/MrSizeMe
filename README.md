@@ -22,6 +22,10 @@ up safely. It runs on Windows, macOS and Linux and speaks German and English.
   NTFS scan via the master file table on Windows; Full Disk Access guide
   on macOS.
 * Menu band with its own icons, keyboard shortcuts.
+* Clean-up help: knowledge list with traffic light, savings overview,
+  recycle bin with protection of system folders, and an optional AI
+  question (Google, local Ollama, Gemini, Claude) that shows exactly what
+  is sent.
 * German and English, light and dark mode.
 
 ## Building

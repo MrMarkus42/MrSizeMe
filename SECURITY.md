@@ -10,10 +10,19 @@ public issue. You will get an answer within a few days.
 
 * **Your files stay untouched.** A scan reads only names, sizes and dates
   (metadata). The content of a file is never read.
-* **No hidden network access.** The program sends nothing anywhere. Planned
-  online functions (update check, asking an AI about a folder) only run after
-  you agree, and send at most a folder name, its size and the operating
-  system – never a full path or your user name.
+* **No hidden network access.** The program only goes online when you
+  click “Send question” or “Open in browser” in the AI part. The exact text
+  is shown before; it contains at most a folder name with up to two folders
+  above it, its size and the kind of system – never a full path, your user
+  name or file contents. “Fully offline” blocks all of it.
+* **Your AI keys stay in the system key store** (Windows Credential
+  Manager, macOS Keychain, on Linux a file readable only by you). They are
+  never written to the settings, the log or the repository, and are only
+  sent to the service they belong to.
+* **Nothing is deleted for good.** Files and folders only go to the recycle
+  bin, after a question. System folders, the standard user folders and
+  everything marked red in the knowledge list are refused. An AI answer
+  never triggers any action.
 * **Links are not followed**, so a scan cannot loop or leave the chosen folder
   through a link or junction.
 * **Safe export.** Names that start with `=`, `+`, `-` or `@` are written so

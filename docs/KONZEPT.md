@@ -127,7 +127,7 @@ sind mit minisign signiert; der öffentliche Schlüssel ist eingebaut.
 | 2 | Oberfläche: Ordnerbaum, Kachelkarte, Dateitypen, Sprachen, Icon | erste Fassung (24.11.); Icon-Auswahl, Feinschliff offen |
 | 3 | Weitere Ansichten: Ring, Kategorien, Größte/Älteste, Alter, Filter | fertig (24.11.) |
 | 4 | Admin-Modus (Windows, macOS, Linux), MFT-Schnell-Scan, Menüband | fertig (24.11.); auf echtem Windows/Mac noch vom Nutzer zu testen |
-| 5 | Aufräumhilfe: Wissensliste, Papierkorb, Vorschläge, KI | offen |
+| 5 | Aufräumhilfe: Wissensliste, Papierkorb, Vorschläge, KI | fertig (24.11.); KI-Anbieter mit echten Schlüsseln noch vom Nutzer zu testen |
 | 6 | Verlauf, Vergleich, Prognose, Warnung, Live-Aktualisierung | offen |
 | 7 | Duplikate, Programme-Ansicht, Cloud-Dateien, Verschieben | offen |
 | 8 | Export, Kommandozeile, Kontextmenü im Explorer/Finder | offen |
@@ -140,3 +140,14 @@ sind mit minisign signiert; der öffentliche Schlüssel ist eingebaut.
   GitHub Actions (nur nach Rückfrage) oder durch Tests des Nutzers geprüft.
 * Abhängigkeiten: neueste Versionen, aber mindestens 14 Tage alt;
   Lock-Datei wird eingecheckt; nur freie Lizenzen.
+
+## Offene Punkte
+
+* `url` 2.5.9 und `cookie` 0.18.3 (Sicherheitskorrekturen RUSTSEC-2026-0592
+  und -0594) einspielen, sobald sie 14 Tage alt sind (ab 4.12. bzw. 7.12.),
+  spätestens vor dem ersten Release. Beide Pakete werden derzeit in kein
+  Programm eingebaut (nur als ungenutzte Wahlmöglichkeit in Cargo.lock).
+* KI-Anbieter: Gemini-Modell voreingestellt `gemini-3.5-flash-lite`,
+  Claude-Modell `claude-opus-5-5` (beide in den KI-Einstellungen änderbar).
+  Der Google-KI-Modus wird über die Adresse `…/search?udm=50&q=…` geöffnet;
+  ändert Google das, nur `ai::google_url` anpassen.

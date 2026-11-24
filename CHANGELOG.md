@@ -32,3 +32,17 @@
   folders, and local NTFS drives are read through the master file table.
 - macOS: check and step-by-step guide for Full Disk Access.
 - Scans can be saved in a checked binary format (used by the helper).
+- Clean-up help: built-in knowledge list of about 40 well-known big folders
+  and files (Windows, macOS, Linux, development, games) with a traffic
+  light (may go / clean up with a tool / do not touch) and the safe way to
+  clean up; "Clean up" list with the possible savings of the whole scan.
+- "What is this? May it go?" window from the right-click menu and the new
+  "Clean up" tab of the menu band.
+- Move to the recycle bin (Windows, macOS, Linux), always with a question
+  first; system folders, user standard folders and red entries are
+  protected. The tree is updated without a new scan.
+- Ask an AI about a folder: Google AI mode or Google search in the browser,
+  a local AI through Ollama, Gemini or Claude with your own key. The exact
+  question is shown before anything is sent; it contains only the folder
+  name, its size and the kind of system.
+- Settings file; "Fully offline" switch; keys kept in the system key store.

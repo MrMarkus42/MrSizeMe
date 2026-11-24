@@ -27,17 +27,31 @@ rfd = "=0.17.2"
 log = "0.4"
 # Language of the operating system (for the default language).
 sys-locale = "0.3"
+serde_json = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
+    "Win32_Security_Credentials",
     "Win32_Storage_FileSystem",
     "Win32_System_Registry",
     "Win32_System_Threading",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+# HTTPS for the optional AI services: Windows and macOS use the TLS of the
+# operating system, Linux uses rustls (no OpenSSL needed).
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+ureq = { version = "3", default-features = false, features = ["native-tls", "json"] }
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Keychain for the user's own AI keys (already used by the TLS layer).
+security-framework = "3"
 
 [dev-dependencies]
 egui_kittest = { version = "=0.37.0", features = ["eframe", "wgpu"] }

@@ -107,7 +107,7 @@ fn categories_age_search_and_ring_chart() {
 
     h.get_by_label("Suche").click();
     h.run();
-    assert!(h.query_by_label_contains("4 Treffer").is_some());
+    assert!(h.query_all_by_label_contains("4 Treffer").next().is_some());
 
     // Both charts, with every measure.
     h.get_by_label("Ringdiagramm").click();
@@ -119,4 +119,77 @@ fn categories_age_search_and_ring_chart() {
     }
     h.get_by_label("Kachelkarte").click();
     h.run();
+}
+
+/// A made-up project folder with a big node_modules (no real files).
+fn cleanup_tree() -> mrsizeme::tree::Tree {
+    use mrsizeme::tree::{Kind, NO_PARENT, Node, ROOT, Tree};
+    use std::ffi::OsStr;
+    let mut t = Tree::new(std::path::PathBuf::from("/projekte/web"), Kind::Dir);
+    let dir = |n: &str| Node::new(OsStr::new(n).into(), NO_PARENT, Kind::Dir);
+    let file = |n: &str, size: u64| {
+        let mut f = Node::new(OsStr::new(n).into(), NO_PARENT, Kind::File);
+        f.size = size;
+        f
+    };
+    let first = t.add_children(ROOT, [dir("node_modules"), file("package.json", 300)]);
+    t.add_children(first, [file("bundle.js", 400 << 20)]);
+    t.sum_up();
+    t
+}
+
+#[test]
+fn cleanup_info_trash_question_and_ai() {
+    let _guard = lock();
+    setup();
+    i18n::set_lang(Lang::De);
+    let mut h = Harness::builder()
+        .with_size(eframe::egui::vec2(1300.0, 820.0))
+        .with_max_steps(32)
+        .build_eframe(|_cc| App::with_tree(cleanup_tree()));
+    h.run();
+
+    // "Aufräumen" is both a menu band tab and a list tab: click them all,
+    // which opens the suggestion list and the clean-up tab of the band.
+    let count = h.get_all_by_label("Aufräumen").count();
+    for i in 0..count {
+        if let Some(n) = h.get_all_by_label("Aufräumen").nth(i) {
+            n.click();
+        }
+        h.run();
+    }
+    assert!(h.query_all_by_label_contains("ohne Risiko freigeben").next().is_some());
+    // Nothing yellow in this folder: no sentence about tools.
+    assert!(h.query_all_by_label_contains("passenden Werkzeugen").next().is_none());
+    h.get_by_label("JavaScript-Pakete (node_modules)").click();
+    h.run();
+
+    // "What is this?" from the menu band.
+    h.get_by_label("Was ist das?").click();
+    h.run();
+    assert!(h.query_by_label("So räumen Sie richtig auf").is_some());
+    assert!(h.query_all_by_label_contains("node_modules").next().is_some());
+
+    // The AI part: the browser is blocked in tests; Claude needs a key.
+    h.get_by_label("Im Browser öffnen").click();
+    h.run();
+    h.get_by_label("Claude").click();
+    h.run();
+    assert!(h.query_all_by_label_contains("Kein Schlüssel hinterlegt").next().is_some());
+
+    // The recycle bin question appears; confirming does nothing in tests.
+    h.get_all_by_label("In den Papierkorb").last().unwrap().click();
+    h.run();
+    assert!(h.query_by_label("In den Papierkorb verschieben?").is_some());
+    h.get_all_by_label("In den Papierkorb").last().unwrap().click();
+    h.run();
+    assert!(h.query_by_label("In den Papierkorb verschieben?").is_none());
+    assert!(h.query_by_label("Fehler").is_none());
+
+    // Offline switch.
+    h.get_by_label("Komplett offline").click();
+    h.run();
+    h.get_by_label("Google KI-Modus").click();
+    h.run();
+    assert!(h.query_all_by_label_contains("ist eingeschaltet").next().is_some());
 }

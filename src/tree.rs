@@ -38,6 +38,8 @@ pub mod flags {
     pub const SKIPPED: u8 = 4;
     /// The scan was cancelled before this folder was read.
     pub const NOT_SCANNED: u8 = 8;
+    /// Moved to the recycle bin; no longer listed under its parent.
+    pub const REMOVED: u8 = 16;
 }
 
 #[derive(Debug, Clone)]
@@ -283,6 +285,37 @@ impl Tree {
         }
     }
 
+    /// Takes a node out after it was moved away (recycle bin): the sums
+    /// above it shrink and it is no longer listed under its parent.
+    pub fn remove(&mut self, id: NodeId) {
+        let n = &self.nodes[id as usize];
+        if id == ROOT || n.has(flags::REMOVED) {
+            return;
+        }
+        let counted = !n.has(flags::HARDLINK_DUP);
+        let (size, alloc) = if counted { (n.size, n.allocated) } else { (0, 0) };
+        let files = n.files + u64::from(n.kind != Kind::Dir);
+        let dirs = n.dirs + u64::from(n.kind == Kind::Dir);
+        let parent = n.parent;
+        let mut cur = parent;
+        while cur != NO_PARENT {
+            let p = &mut self.nodes[cur as usize];
+            p.size = p.size.saturating_sub(size);
+            p.allocated = p.allocated.saturating_sub(alloc);
+            p.files = p.files.saturating_sub(files);
+            p.dirs = p.dirs.saturating_sub(dirs);
+            cur = p.parent;
+        }
+        let p = &mut self.nodes[parent as usize];
+        let start = p.first_child as usize;
+        let slice = &mut self.order[start..start + p.child_count as usize];
+        if let Some(pos) = slice.iter().position(|&c| c == id) {
+            slice[pos..].rotate_left(1);
+            p.child_count -= 1;
+        }
+        self.nodes[id as usize].flags |= flags::REMOVED;
+    }
+
     /// Finds the node with this path, if it is part of the tree.
     pub fn find(&self, path: &Path) -> Option<NodeId> {
         let rest = path.strip_prefix(&self.root_path).ok()?;
@@ -365,6 +398,22 @@ mod tests {
         assert_eq!(names(&t), ["Z", "sub", "a.txt"]);
         // Sorting must not break the lookup by path.
         assert!(t.find(Path::new("/x/sub/b")).is_some());
+    }
+
+    #[test]
+    fn removing_updates_sums_and_lists() {
+        let mut t = sample();
+        let sub = t.find(Path::new("/x/sub")).unwrap();
+        t.remove(sub);
+        assert_eq!(t.root().size, 15);
+        assert_eq!(t.root().files, 2);
+        assert_eq!(t.root().dirs, 0);
+        assert_eq!(t.children(ROOT).len(), 2);
+        assert!(t.find(Path::new("/x/sub")).is_none());
+        t.remove(sub); // twice changes nothing
+        assert_eq!(t.root().size, 15);
+        t.remove(ROOT);
+        assert_eq!(t.root().size, 15);
     }
 
     #[test]

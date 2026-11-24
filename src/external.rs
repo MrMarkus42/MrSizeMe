@@ -40,6 +40,20 @@ pub fn open_folder(path: &Path) -> std::io::Result<Outcome> {
     Ok(Outcome::Done)
 }
 
+/// Opens a web address in the default browser. Only https addresses are
+/// accepted (they are built by the program, never taken from files).
+pub fn open_url(url: &str) -> std::io::Result<Outcome> {
+    if !url.starts_with("https://") || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a https address"));
+    }
+    if is_blocked() {
+        log::info!("outside action blocked (test mode): open web page");
+        return Ok(Outcome::Blocked);
+    }
+    imp::open_url(url)?;
+    Ok(Outcome::Done)
+}
+
 /// macOS: opens System Settings at "Privacy & Security → Full Disk Access".
 pub fn open_full_disk_access_settings() -> std::io::Result<Outcome> {
     if is_blocked() {
@@ -85,10 +99,28 @@ mod imp {
         if result as isize > 32 {
             Ok(())
         } else {
-            Err(std::io::Error::other(format!(
-                "Explorer konnte nicht geöffnet werden (Code {})",
-                result as isize
-            )))
+            Err(std::io::Error::other(format!("Explorer could not be opened (code {})", result as isize)))
+        }
+    }
+
+    pub fn open_url(url: &str) -> std::io::Result<()> {
+        let file: Vec<u16> = url.encode_utf16().chain(Some(0)).collect();
+        let verb: Vec<u16> = "open".encode_utf16().chain(Some(0)).collect();
+        // SAFETY: both strings are NUL-terminated; the other pointers may be null.
+        let result = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                verb.as_ptr(),
+                file.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+        if result as isize > 32 {
+            Ok(())
+        } else {
+            Err(std::io::Error::other(format!("browser could not be opened (code {})", result as isize)))
         }
     }
 }
@@ -113,6 +145,18 @@ mod imp {
         std::thread::spawn(move || child.wait());
         Ok(())
     }
+
+    pub fn open_url(url: &str) -> std::io::Result<()> {
+        let program = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+        let mut child = Command::new(program)
+            .arg(url)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        std::thread::spawn(move || child.wait());
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -123,5 +167,8 @@ mod tests {
     fn unit_tests_never_reach_outside() {
         assert!(is_blocked());
         assert_eq!(open_folder(Path::new(".")).unwrap(), Outcome::Blocked);
+        assert_eq!(open_url("https://www.google.com/search?q=x").unwrap(), Outcome::Blocked);
+        assert!(open_url("file:///etc/passwd").is_err());
+        assert!(open_url("https://a b").is_err());
     }
 }

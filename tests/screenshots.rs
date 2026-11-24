@@ -52,6 +52,34 @@ fn sample_tree() -> Tree {
 }
 
 fn shot(dark: bool, lang: Lang, name: &str, clicks: &[&str]) {
+    shot_with(sample_tree, dark, lang, name, clicks);
+}
+
+/// A made-up home folder with typical clean-up candidates.
+fn cleanup_tree() -> Tree {
+    let mut t = Tree::new(PathBuf::from("/home/beispiel"), Kind::Dir);
+    let dir = |n: &str| Node::new(OsStr::new(n).into(), NO_PARENT, Kind::Dir);
+    let file = |n: &str, mb: u64| {
+        let mut f = Node::new(OsStr::new(n).into(), NO_PARENT, Kind::File);
+        f.size = mb << 20;
+        f.allocated = f.size;
+        f.modified = 1_760_000_000;
+        f
+    };
+    let top = t.add_children(ROOT, [dir("Projekte"), dir(".cache"), dir("Downloads"), dir("Videos")]);
+    let proj = t.add_children(top, [dir("web"), dir("rust")]);
+    let web = t.add_children(proj, [dir("node_modules"), file("package.json", 0)]);
+    t.add_children(web, [file("bundle.js", 900), file("vendor.js", 400)]);
+    let rust = t.add_children(proj + 1, [dir("target"), file("Cargo.toml", 0)]);
+    t.add_children(rust, [file("app", 2300)]);
+    t.add_children(top + 1, [file("browser-cache.bin", 1700), file("thumbnails.db", 300)]);
+    t.add_children(top + 2, [file("setup-alt.exe", 800), file("urlaub.zip", 3100)]);
+    t.add_children(top + 3, [file("film.mkv", 6400)]);
+    t.sum_up();
+    t
+}
+
+fn shot_with(tree: fn() -> Tree, dark: bool, lang: Lang, name: &str, clicks: &[&str]) {
     common::setup();
     i18n::set_lang(lang);
     let theme = if dark { egui::Theme::Dark } else { egui::Theme::Light };
@@ -62,11 +90,18 @@ fn shot(dark: bool, lang: Lang, name: &str, clicks: &[&str]) {
         .wgpu()
         .build_eframe(move |cc| {
             cc.egui_ctx.set_theme(theme);
-            App::with_tree(sample_tree())
+            App::with_tree(tree())
         });
     h.run();
     for label in clicks {
-        h.get_all_by_label(label).next().unwrap_or_else(|| panic!("no {label}")).click();
+        // "Text@last" clicks the last element with that text (e.g. a list tab
+        // that has the same name as a menu band tab).
+        let (text, last) = match label.strip_suffix("@last") {
+            Some(t) => (t, true),
+            None => (*label, false),
+        };
+        let node = if last { h.get_all_by_label(text).last() } else { h.get_all_by_label(text).next() };
+        node.unwrap_or_else(|| panic!("no {label}")).click();
         h.run();
     }
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/ui-screenshots");
@@ -87,5 +122,13 @@ fn screenshots() {
     shot(false, Lang::De, "menueband-ansicht-hell", &["Ansicht"]);
     shot(true, Lang::De, "menueband-hilfe-dunkel", &["Hilfe", "Tastenkürzel"]);
     shot(false, Lang::De, "hauptfenster-hell", &[]);
+    shot_with(cleanup_tree, false, Lang::De, "aufraeumen-hell", &["Aufräumen", "Aufräumen@last"]);
+    shot_with(
+        cleanup_tree,
+        true,
+        Lang::De,
+        "was-ist-das-dunkel",
+        &["Aufräumen", "Aufräumen@last", "JavaScript-Pakete (node_modules)", "Was ist das?"],
+    );
     shot(false, Lang::En, "main-window-light-en", &["Ring chart", "Categories"]);
 }

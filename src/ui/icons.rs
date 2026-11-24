@@ -41,6 +41,12 @@ pub enum Icon {
     Info,
     Log,
     Keyboard,
+    Question,
+    Trash,
+    Sparkle,
+    Gear,
+    Offline,
+    Broom,
 }
 
 const BLUE: Color32 = Color32::from_rgb(59, 130, 246);
@@ -326,6 +332,83 @@ pub fn draw(p: &Painter, rect: Rect, icon: Icon, ink: Color32, paper: Color32, e
                 pen.line(&[(8.0, y), (16.0, y)]);
             }
             pen.p.circle_filled(pen.at(18.0, 19.0), pen.u(3.0), amber);
+        }
+        Icon::Question => {
+            pen.circle(12.0, 12.0, 9.5, amber);
+            pen.p.add(Shape::line(
+                vec![
+                    pen.at(9.0, 9.5),
+                    pen.at(9.6, 7.4),
+                    pen.at(12.0, 6.5),
+                    pen.at(14.4, 7.4),
+                    pen.at(15.0, 9.5),
+                    pen.at(12.0, 12.0),
+                    pen.at(12.0, 14.0),
+                ],
+                Stroke::new(w * 1.2, Color32::WHITE),
+            ));
+            pen.p.circle_filled(pen.at(12.0, 17.3), pen.u(1.4), Color32::WHITE);
+        }
+        Icon::Trash => {
+            pen.closed(&[(5.5, 7.0), (18.5, 7.0), (17.0, 21.5), (7.0, 21.5)], paper);
+            pen.line(&[(3.0, 7.0), (21.0, 7.0)]);
+            pen.line(&[(9.5, 7.0), (10.0, 3.5), (14.0, 3.5), (14.5, 7.0)]);
+            for x in [9.8, 12.0, 14.2] {
+                pen.p.add(Shape::line(vec![pen.at(x, 10.0), pen.at(x, 18.5)], Stroke::new(w * 0.9, green)));
+            }
+        }
+        Icon::Sparkle => {
+            let star = |cx: f32, cy: f32, r: f32, c: Color32| {
+                let pts: Vec<Pos2> = (0..8)
+                    .map(|k| {
+                        let a = k as f32 * PI / 4.0 - PI / 2.0;
+                        let rr = if k % 2 == 0 { r } else { r * 0.32 };
+                        pen.at(cx + rr * a.cos(), cy + rr * a.sin())
+                    })
+                    .collect();
+                pen.p.add(Shape::convex_polygon(pts.clone(), c, Stroke::NONE));
+                pen.p.add(Shape::closed_line(pts, pen.stroke()));
+            };
+            star(10.0, 13.0, 8.5, purple);
+            star(18.5, 5.5, 4.0, teal);
+        }
+        Icon::Gear => {
+            for k in 0..8 {
+                let a = k as f32 * TAU / 8.0;
+                pen.p.add(Shape::line(
+                    vec![
+                        pen.at(12.0 + 6.5 * a.cos(), 12.0 + 6.5 * a.sin()),
+                        pen.at(12.0 + 10.0 * a.cos(), 12.0 + 10.0 * a.sin()),
+                    ],
+                    Stroke::new(w * 2.0, ink),
+                ));
+            }
+            pen.circle(12.0, 12.0, 7.0, paper);
+            pen.circle(12.0, 12.0, 2.8, teal);
+        }
+        Icon::Offline => {
+            pen.closed(
+                &[
+                    (6.0, 17.5),
+                    (3.0, 14.5),
+                    (5.0, 10.5),
+                    (9.0, 9.5),
+                    (12.0, 5.5),
+                    (17.0, 6.0),
+                    (19.5, 10.0),
+                    (21.5, 13.5),
+                    (19.0, 17.5),
+                ],
+                blue.gamma_multiply(0.5),
+            );
+            pen.p.add(Shape::line(vec![pen.at(3.5, 21.0), pen.at(20.5, 3.0)], Stroke::new(w * 1.5, red)));
+        }
+        Icon::Broom => {
+            pen.p.add(Shape::line(vec![pen.at(19.5, 2.5), pen.at(11.5, 12.5)], Stroke::new(w * 1.5, amber)));
+            pen.closed(&[(9.0, 11.0), (14.0, 15.0), (9.5, 21.5), (3.0, 16.5)], amber.gamma_multiply(0.75));
+            for (x0, y0) in [(5.0, 18.0), (7.0, 19.5)] {
+                pen.line(&[(x0, y0), (x0 + 3.0, y0 - 4.0)]);
+            }
         }
         Icon::Keyboard => {
             pen.boxed(2.0, 6.5, 20.0, 11.0, paper);

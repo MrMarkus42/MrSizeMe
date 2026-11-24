@@ -1,5 +1,6 @@
 //! The program window.
 
+mod cleanup;
 mod folders;
 mod icons;
 mod lists;
@@ -37,6 +38,7 @@ pub enum View {
     Oldest,
     Age,
     Search,
+    Cleanup,
 }
 
 /// The chart on the right side.
@@ -77,6 +79,7 @@ struct Running {
 pub enum Tab {
     Start,
     View,
+    Cleanup,
     Help,
 }
 
@@ -96,6 +99,8 @@ pub(crate) enum Command {
     About,
     Shortcuts,
     SearchView,
+    ToggleOffline,
+    SetLang(Lang),
     Node(Action),
 }
 
@@ -108,6 +113,10 @@ pub(crate) enum Action {
     OpenFolder(NodeId),
     CopyPath(NodeId),
     Sort(SortKey),
+    /// Show the "What is this?" window.
+    Info(NodeId),
+    /// Ask whether to move the node to the recycle bin.
+    AskTrash(NodeId),
 }
 
 pub struct App {
@@ -149,12 +158,21 @@ pub struct App {
     admin_tree: bool,
     /// This process itself runs with admin rights.
     elevated: bool,
+    cleanup: cleanup::State,
+    settings: crate::settings::Settings,
+    /// Settings are saved (not in tests).
+    persist: bool,
 }
 
 impl App {
     /// The window as it starts; scans `start` right away if given.
     pub fn new(start: Option<PathBuf>) -> Self {
         let mut app = Self::empty();
+        app.settings = crate::settings::Settings::load();
+        app.persist = true;
+        if let Some(l) = app.settings.lang {
+            i18n::set_lang(l);
+        }
         if let Some(path) = start {
             app.path_text = path.display().to_string();
             app.start_scan(path);
@@ -206,6 +224,9 @@ impl App {
             show_full_access: false,
             admin_tree: false,
             elevated: crate::elevate::is_elevated(),
+            cleanup: cleanup::State::default(),
+            settings: crate::settings::Settings::default(),
+            persist: false,
         }
     }
 
@@ -218,6 +239,7 @@ impl App {
         self.expanded.insert(ROOT);
         self.map_root = ROOT;
         // The caches compare the generation, so they refresh by themselves.
+        self.cleanup.reset();
         self.map_cache = None;
         self.ring_cache = None;
     }
@@ -327,12 +349,65 @@ impl App {
                 }
             }
             Action::CopyPath(id) => ctx.copy_text(tree.path(id).display().to_string()),
+            Action::Info(id) => {
+                self.selected = Some(id);
+                self.cleanup.open_info(id);
+            }
+            // The scanned folder itself is never offered for the recycle bin.
+            Action::AskTrash(id) if id != ROOT => self.cleanup.confirm = Some(id),
+            Action::AskTrash(_) => {}
             Action::Sort(key) => {
                 self.sort = if self.sort.0 == key { (key, !self.sort.1) } else { (key, false) };
                 if let Some(tree) = &mut self.tree {
                     tree.sort(self.sort.0, self.sort.1);
                 }
             }
+        }
+    }
+
+    fn save_settings(&mut self) {
+        if self.persist
+            && let Err(e) = self.settings.save()
+        {
+            log::warn!("settings not saved: {e}");
+        }
+    }
+
+    /// Moves a node to the recycle bin and takes it out of the tree.
+    fn move_to_trash(&mut self, id: NodeId) {
+        let Some(tree) = &self.tree else { return };
+        if id == ROOT {
+            return;
+        }
+        let path = tree.path(id);
+        let (size, parent) = (tree.node(id).size, tree.node(id).parent);
+        let map_inside = tree.ancestors(self.map_root).contains(&id);
+        match crate::trash::move_to_trash(&path) {
+            Ok(external::Outcome::Done) => {
+                if let Some(tree) = &mut self.tree {
+                    tree.remove(id);
+                }
+                self.generation += 1;
+                self.map_cache = None;
+                self.ring_cache = None;
+                if self.selected == Some(id) {
+                    self.selected = Some(parent);
+                }
+                if map_inside {
+                    self.map_root = parent;
+                }
+                self.cleanup.info = None;
+                let text = format!("{}: {}", tr().trash_done, format::size(size));
+                self.notice = Some((text, Instant::now()));
+            }
+            Ok(external::Outcome::Blocked) => {}
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(e) => self.show_error(format!(
+                "{}
+{}",
+                path.display(),
+                format::io_error(&e)
+            )),
         }
     }
 
@@ -365,8 +440,12 @@ impl App {
 
         ui.add_space(3.0);
         ui.horizontal(|ui| {
-            for (tab, label) in [(Tab::Start, t.tab_start), (Tab::View, t.tab_view), (Tab::Help, t.tab_help)]
-            {
+            for (tab, label) in [
+                (Tab::Start, t.tab_start),
+                (Tab::View, t.tab_view),
+                (Tab::Cleanup, t.tab_cleanup),
+                (Tab::Help, t.tab_help),
+            ] {
                 ui.selectable_value(&mut self.tab, tab, egui::RichText::new(label).strong());
             }
         });
@@ -520,10 +599,52 @@ impl App {
                             for l in Lang::ALL {
                                 if small(ui, Icon::Globe, l.native_name(), true, i18n::lang() == l).clicked()
                                 {
-                                    i18n::set_lang(l);
+                                    cmds.push(Command::SetLang(l));
                                 }
                             }
                         });
+                    });
+                }
+                Tab::Cleanup => {
+                    group(ui, t.grp_selection, |ui| {
+                        let id = sel;
+                        if big(ui, Icon::Question, t.btn_what_is, id.is_some(), false).clicked()
+                            && let Some(id) = id
+                        {
+                            cmds.push(Command::Node(Action::Info(id)));
+                        }
+                        let can_trash = id.is_some_and(|i| i != ROOT);
+                        if big(ui, Icon::Trash, t.btn_trash, can_trash, false).clicked()
+                            && let Some(id) = id
+                        {
+                            cmds.push(Command::Node(Action::AskTrash(id)));
+                        }
+                    });
+                    group(ui, t.grp_suggestions, |ui| {
+                        if big(ui, Icon::Broom, t.view_cleanup, has_tree, self.view == View::Cleanup)
+                            .clicked()
+                        {
+                            self.view = View::Cleanup;
+                        }
+                    });
+                    group(ui, t.grp_ai, |ui| {
+                        if big(ui, Icon::Sparkle, t.ai_heading, sel.is_some(), false).clicked()
+                            && let Some(id) = sel
+                        {
+                            cmds.push(Command::Node(Action::Info(id)));
+                        }
+                        if big(ui, Icon::Gear, t.btn_ai_settings, true, self.cleanup.show_settings).clicked()
+                        {
+                            self.cleanup.show_settings = true;
+                        }
+                    });
+                    group(ui, t.grp_privacy, |ui| {
+                        if big(ui, Icon::Offline, t.btn_offline, true, self.settings.offline)
+                            .on_hover_text(t.tip_offline)
+                            .clicked()
+                        {
+                            cmds.push(Command::ToggleOffline);
+                        }
                     });
                 }
                 Tab::Help => {
@@ -643,6 +764,15 @@ impl App {
             Command::About => self.show_about = true,
             Command::Shortcuts => self.show_shortcuts = true,
             Command::SearchView => self.view = View::Search,
+            Command::ToggleOffline => {
+                self.settings.offline = !self.settings.offline;
+                self.save_settings();
+            }
+            Command::SetLang(l) => {
+                i18n::set_lang(l);
+                self.settings.lang = Some(l);
+                self.save_settings();
+            }
             Command::Node(action) => self.apply(action, ctx),
         }
     }
@@ -830,6 +960,7 @@ impl App {
                 (View::Oldest, t.view_oldest),
                 (View::Age, t.view_age),
                 (View::Search, t.view_search),
+                (View::Cleanup, t.view_cleanup),
             ] {
                 ui.selectable_value(&mut self.view, view, label);
             }
@@ -875,6 +1006,8 @@ impl App {
                 lists::ages(ui, tree, start, stats);
                 Vec::new()
             }
+            // Suggestions always cover the whole scan.
+            View::Cleanup => cleanup::list(ui, tree, ROOT, generation, &mut self.cleanup),
             View::Search => {
                 ui.label(
                     egui::RichText::new(format!("{} {}", t.in_folder, tree.path(start).display())).weak(),
@@ -1010,6 +1143,22 @@ impl App {
             }
         });
         self.dialogs(&ctx);
+        self.cleanup.poll(&ctx);
+        let mut trash_now = None;
+        if let Some(tree) = &self.tree {
+            actions.extend(cleanup::info_window(&ctx, tree, &mut self.cleanup, &self.settings));
+            trash_now = cleanup::confirm_window(&ctx, tree, &mut self.cleanup);
+        }
+        let (changed, settings_error) = cleanup::settings_window(&ctx, &mut self.cleanup, &mut self.settings);
+        if changed {
+            self.save_settings();
+        }
+        if let Some(e) = settings_error {
+            self.show_error(e);
+        }
+        if let Some(id) = trash_now {
+            self.move_to_trash(id);
+        }
         self.error_window(&ctx);
         for a in actions {
             self.apply(a, &ctx);

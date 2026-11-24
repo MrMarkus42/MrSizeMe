@@ -17,6 +17,9 @@ ALLOWED = {
     "MIT", "MIT-0", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause",
     "BSD-3-Clause", "ISC", "Zlib", "Unicode-3.0", "Unicode-DFS-2016", "CC0-1.0",
     "BSL-1.0", "0BSD", "OFL-1.1", "LicenseRef-UFL-1.0", "Ubuntu-font-1.0", "Unlicense", "NCSA",
+    # Permissive licence for data: the Mozilla root certificates used for
+    # HTTPS (webpki-roots, webpki-root-certs).
+    "CDLA-Permissive-2.0",
 }
 
 TOKEN = re.compile(r"\(|\)|AND|OR|WITH\s+\S+|[A-Za-z0-9.+\-]+")

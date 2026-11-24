@@ -1,5 +1,6 @@
 //! MrSizeMe – shows which folders and files use the space on your disks.
 
+pub mod ai;
 pub mod applog;
 pub mod category;
 pub mod elevate;
@@ -7,13 +8,17 @@ pub mod export;
 pub mod external;
 pub mod format;
 pub mod i18n;
+pub mod knowledge;
 pub mod mft;
 pub mod platform;
 pub mod query;
 pub mod scan;
+pub mod secrets;
+pub mod settings;
 pub mod snapshot;
 pub mod stats;
 pub mod sunburst;
+pub mod trash;
 pub mod tree;
 pub mod treemap;
 pub mod ui;

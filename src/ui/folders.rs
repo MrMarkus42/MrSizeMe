@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use eframe::egui;
+use egui::RichText;
 use egui_extras::{Column, TableBuilder};
 
 use super::Action;
@@ -189,6 +190,11 @@ pub fn show(
 pub(crate) fn context_menu(ui: &mut egui::Ui, id: NodeId, actions: &mut Vec<Action>) {
     let t = tr();
     actions.push(Action::Select(id));
+    if ui.button(RichText::new(format!("{} – {}", t.btn_what_is, t.ai_heading)).strong()).clicked() {
+        actions.push(Action::Info(id));
+        ui.close();
+    }
+    ui.separator();
     if ui.button(t.open_folder).clicked() {
         actions.push(Action::OpenFolder(id));
         ui.close();
@@ -199,6 +205,11 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, id: NodeId, actions: &mut Vec<Acti
     }
     if ui.button(t.show_in_map).clicked() {
         actions.push(Action::MapRoot(id));
+        ui.close();
+    }
+    ui.separator();
+    if ui.add_enabled(id != ROOT, egui::Button::new(format!("{} …", t.btn_trash))).clicked() {
+        actions.push(Action::AskTrash(id));
         ui.close();
     }
 }
