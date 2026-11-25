@@ -9,7 +9,9 @@ public issue. You will get an answer within a few days.
 ## What MrSizeMe protects
 
 * **Your files stay untouched.** A scan reads only names, sizes and dates
-  (metadata). The content of a file is never read.
+  (metadata). File contents are read only by the duplicate search you start
+  yourself, to compare checksums on this computer; cloud files that are
+  only online are never read.
 * **No hidden network access.** The program only goes online when you
   click “Send question” or “Open in browser” in the AI part. The exact text
   is shown before; it contains at most a folder name with up to two folders
@@ -42,6 +44,9 @@ public issue. You will get an answer within a few days.
   the larger folders and files (no contents) in the program's settings
   folder, can be switched off (“Keep scans”) and deleted with one click.
   Saved files are checked before use; a damaged file is skipped.
+* **Moving is checked.** The move assistant copies first, checks every
+  copied file and only then removes the original; on any problem the copy
+  is removed and the original stays. Protected and cloud folders are refused.
 * **Watching only reads.** The live update and the disk warning only read
   names, sizes and free space; they never change anything on the disk.
 * **Tests stay inside.** One central switch blocks every outside action

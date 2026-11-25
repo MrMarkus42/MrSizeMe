@@ -208,6 +208,10 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, id: NodeId, actions: &mut Vec<Acti
         ui.close();
     }
     ui.separator();
+    if ui.add_enabled(id != ROOT, egui::Button::new(format!("{} …", t.btn_move))).clicked() {
+        actions.push(Action::AskMove(id));
+        ui.close();
+    }
     if ui.add_enabled(id != ROOT, egui::Button::new(format!("{} …", t.btn_trash))).clicked() {
         actions.push(Action::AskTrash(id));
         ui.close();

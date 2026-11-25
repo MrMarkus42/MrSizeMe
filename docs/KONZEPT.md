@@ -147,7 +147,7 @@ sind mit minisign signiert; der öffentliche Schlüssel ist eingebaut.
 | 4 | Admin-Modus (Windows, macOS, Linux), MFT-Schnell-Scan, Menüband | fertig (24.11.); auf echtem Windows/Mac noch vom Nutzer zu testen |
 | 5 | Aufräumhilfe: Wissensliste, Papierkorb, Vorschläge, KI | fertig (24.11.); KI-Anbieter mit echten Schlüsseln noch vom Nutzer zu testen |
 | 6 | Verlauf, Vergleich, Prognose, Warnung, Live-Aktualisierung | fertig (25.11.); Live-Aktualisierung auf echtem Windows/Mac noch vom Nutzer zu testen |
-| 7 | Duplikate, Programme-Ansicht, Cloud-Dateien, Verschieben | offen |
+| 7 | Duplikate, Programme-Ansicht, Cloud-Dateien, Verschieben | fertig (25.11.); „Nur online behalten“ und Verknüpfung (Windows) noch vom Nutzer zu testen |
 | 8 | Export, Kommandozeile, Kontextmenü im Explorer/Finder | offen |
 | 9 | Updates, Installer, portable Version, .dmg, Website | offen |
 

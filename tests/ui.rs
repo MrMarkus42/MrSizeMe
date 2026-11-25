@@ -290,3 +290,139 @@ fn history_compare_forecast_and_clear() {
     assert!(!dir.path().join("history").exists());
     assert!(h.query_by_label("Fehler").is_none());
 }
+
+#[test]
+fn duplicates_are_found_and_shown() {
+    let _guard = lock();
+    let t = TempDir::new();
+    let data = vec![7u8; 2 << 20];
+    t.file("a/kopie1.bin", 0);
+    std::fs::write(t.path().join("a/kopie1.bin"), &data).unwrap();
+    std::fs::create_dir_all(t.path().join("b")).unwrap();
+    std::fs::write(t.path().join("b/kopie2.bin"), &data).unwrap();
+    t.file("einzeln.bin", 3 << 20);
+    let mut h = harness(&t);
+    h.get_all_by_label("Aufräumen").next().unwrap().click();
+    h.run();
+    h.get_by_label("Doppelte Dateien").click();
+    h.run();
+    h.get_by_label("Suche starten").click();
+    for _ in 0..100 {
+        h.run();
+        if h.query_all_by_label_contains("doppelt belegt").next().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    }
+    assert!(h.query_all_by_label_contains("1 Gruppen gleicher Dateien").next().is_some());
+    assert!(h.query_all_by_label_contains("kopie2.bin").next().is_some());
+    assert!(h.query_all_by_label_contains("einzeln.bin").next().is_none());
+}
+
+#[test]
+fn cloud_and_programs() {
+    use mrsizeme::apps::App as Program;
+    use mrsizeme::cloud::Root;
+    use mrsizeme::tree::{Kind, NO_PARENT, Node, ROOT, Tree, flags};
+    use std::ffi::OsStr;
+    use std::path::PathBuf;
+    let _guard = lock();
+    setup();
+    i18n::set_lang(Lang::De);
+    let make = || {
+        let mut t = Tree::new(PathBuf::from("/home/x"), Kind::Dir);
+        let dir = |n: &str| Node::new(OsStr::new(n).into(), NO_PARENT, Kind::Dir);
+        let file = |n: &str, size: u64, online: bool| {
+            let mut f = Node::new(OsStr::new(n).into(), NO_PARENT, Kind::File);
+            f.size = size;
+            f.allocated = if online { 0 } else { size };
+            if online {
+                f.flags |= flags::ONLINE_ONLY;
+            }
+            f
+        };
+        let top = t.add_children(ROOT, [dir("OneDrive"), dir("Spiele")]);
+        let od = t.add_children(top, [dir("Fotos")]);
+        t.add_children(od, [file("urlaub.jpg", 30 << 20, false), file("alt.mp4", 900 << 20, true)]);
+        t.add_children(top + 1, [file("spiel.exe", 200 << 20, false)]);
+        t.sum_up();
+        t
+    };
+    let roots = vec![Root { name: "OneDrive".into(), path: PathBuf::from("/home/x/OneDrive") }];
+    let programs = vec![Program {
+        name: "Spiel".into(),
+        location: Some(PathBuf::from("/home/x/Spiele")),
+        data: vec![],
+        reported: None,
+    }];
+    let mut h =
+        Harness::builder().with_size(eframe::egui::vec2(1300.0, 820.0)).with_max_steps(32).build_eframe(
+            move |_cc| App::with_tree(make()).with_cloud_roots(roots.clone()).with_apps(programs.clone()),
+        );
+    h.run();
+    h.get_by_label("Cloud").click();
+    h.run();
+    assert!(h.query_all_by_label_contains("Nur online: 900 MB (1 Dateien)").next().is_some());
+    if mrsizeme::cloud::can_free_up() {
+        h.get_all_by_label("Nur online behalten").next().unwrap().click();
+        h.run();
+        // The question appears; confirming does nothing in tests.
+        assert!(h.query_all_by_label_contains("nur online behalten?").next().is_some());
+        h.get_all_by_label("Nur online behalten").last().unwrap().click();
+        h.run();
+    }
+    assert!(h.query_by_label("Fehler").is_none());
+
+    h.get_by_label("Programme").click();
+    h.run();
+    assert!(h.query_by_label("Spiel").is_some());
+    assert!(h.query_all_by_label("200 MB").next().is_some());
+}
+
+#[test]
+fn move_assistant_moves_and_links() {
+    let _guard = lock();
+    setup();
+    i18n::set_lang(Lang::De);
+    // Not in the system temp folder: on macOS that lies below a protected folder.
+    let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target/test-tmp")
+        .join(format!("ui-move-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(base.join("quelle/Spiele/level")).unwrap();
+    std::fs::write(base.join("quelle/Spiele/level/karte.dat"), vec![1u8; 70_000]).unwrap();
+    std::fs::create_dir_all(base.join("ziel")).unwrap();
+    let tree = scan(&base.join("quelle"), &Options::default(), &Progress::default()).unwrap();
+    let mut h = Harness::builder()
+        .with_size(eframe::egui::vec2(1300.0, 820.0))
+        .with_max_steps(32)
+        .build_eframe(move |_cc| App::with_tree(tree));
+    h.run();
+    h.get_by_label("Spiele").click();
+    h.run();
+    h.get_all_by_label("Aufräumen").next().unwrap().click();
+    h.run();
+    h.get_by_label("Auf andere Platte verschieben").click();
+    h.run();
+    let field = h.get_all_by_label("Ziel:").last().unwrap();
+    field.focus();
+    field.type_text(&base.join("ziel").display().to_string());
+    h.run();
+    h.get_by_label("Original danach löschen (erst wenn die Kopie geprüft ist)").click();
+    h.run();
+    h.get_all_by_label("Verschieben").last().unwrap().click();
+    for _ in 0..100 {
+        h.run();
+        if h.query_all_by_label_contains("Fertig:").next().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    }
+    assert!(h.query_all_by_label_contains("1 Dateien").next().is_some());
+    assert!(base.join("ziel/Spiele/level/karte.dat").exists());
+    assert!(
+        std::fs::symlink_metadata(base.join("quelle/Spiele")).is_ok_and(|m| !m.is_dir() || cfg!(windows))
+    );
+    assert!(h.query_by_label("Fehler").is_none());
+    std::fs::remove_dir_all(&base).unwrap();
+}

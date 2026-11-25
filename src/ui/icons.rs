@@ -51,6 +51,10 @@ pub enum Icon {
     Live,
     Bell,
     Bookmark,
+    Duplicates,
+    Apps,
+    Cloud,
+    Move,
 }
 
 const BLUE: Color32 = Color32::from_rgb(59, 130, 246);
@@ -413,6 +417,32 @@ pub fn draw(p: &Painter, rect: Rect, icon: Icon, ink: Color32, paper: Color32, e
             for (x0, y0) in [(5.0, 18.0), (7.0, 19.5)] {
                 pen.line(&[(x0, y0), (x0 + 3.0, y0 - 4.0)]);
             }
+        }
+        Icon::Duplicates => {
+            pen.boxed(3.0, 3.0, 11.0, 14.0, paper);
+            pen.boxed(10.0, 7.0, 11.0, 14.0, amber.gamma_multiply(0.5));
+            pen.line(&[(12.5, 11.5), (18.5, 11.5)]);
+            pen.line(&[(12.5, 15.0), (18.5, 15.0)]);
+        }
+        Icon::Apps => {
+            let hues = [blue, teal, amber, purple];
+            for (i, h) in hues.iter().enumerate() {
+                let (x, y) = (3.0 + (i % 2) as f32 * 10.0, 3.0 + (i / 2) as f32 * 10.0);
+                pen.boxed(x, y, 8.0, 8.0, *h);
+            }
+        }
+        Icon::Cloud => {
+            pen.circle(8.5, 14.0, 4.5, blue.gamma_multiply(0.6));
+            pen.circle(14.0, 10.5, 6.0, blue.gamma_multiply(0.6));
+            pen.circle(18.0, 15.0, 3.8, blue.gamma_multiply(0.6));
+            pen.filled(8.5, 14.0, 9.5, 4.8, blue.gamma_multiply(0.6));
+            pen.line(&[(8.5, 18.8), (18.0, 18.8)]);
+        }
+        Icon::Move => {
+            pen.boxed(2.0, 8.0, 7.0, 9.0, paper);
+            pen.boxed(15.0, 8.0, 7.0, 9.0, green.gamma_multiply(0.5));
+            pen.p.add(Shape::line(vec![pen.at(9.5, 12.5), pen.at(13.0, 12.5)], Stroke::new(w * 1.3, green)));
+            pen.arrow_head((15.0, 12.5), vec2(1.0, 0.0), green);
         }
         Icon::History => {
             pen.circle(12.0, 12.0, 9.0, teal.gamma_multiply(0.3));

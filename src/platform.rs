@@ -19,6 +19,8 @@ pub struct Entry {
     pub link_id: Option<(u64, u64)>,
     /// Device of a folder (to stay on one file system).
     pub device: Option<u64>,
+    /// A cloud file whose content is not on this computer (only online).
+    pub online_only: bool,
 }
 
 /// Last change of an entry in seconds since 1970, or [`NO_TIME`].
@@ -175,6 +177,7 @@ mod imp {
                 modified: super::modified(&md),
                 link_id: (kind == Kind::File && md.nlink() > 1).then(|| (md.dev(), md.ino())),
                 device: (kind == Kind::Dir).then(|| md.dev()),
+                online_only: kind == Kind::File && online_only(&md),
             });
         }
         (entries, error)
@@ -182,6 +185,19 @@ mod imp {
 
     pub fn device(md: &Metadata) -> Option<u64> {
         Some(md.dev())
+    }
+
+    /// macOS: iCloud files that were moved off the disk ("dataless").
+    #[cfg(target_os = "macos")]
+    fn online_only(md: &Metadata) -> bool {
+        use std::os::macos::fs::MetadataExt as _;
+        const SF_DATALESS: u32 = 0x4000_0000;
+        md.st_flags() & SF_DATALESS != 0
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn online_only(_md: &Metadata) -> bool {
+        false
     }
 }
 
@@ -215,6 +231,9 @@ mod imp {
     const FILE_ATTRIBUTE_OFFLINE: u32 = 0x1000;
     const FILE_ATTRIBUTE_RECALL_ON_OPEN: u32 = 0x4_0000;
     const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS: u32 = 0x40_0000;
+    /// Cloud placeholders whose content is fetched on use.
+    const ONLINE_ONLY: u32 =
+        FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
     /// Reparse points that stand for another place (links, junctions, mount points).
     const NAME_SURROGATE: u32 = 0x2000_0000;
     /// Files whose space on the disk differs from their length rounded up
@@ -381,6 +400,7 @@ mod imp {
                     modified: filetime_to_unix(r.last_write),
                     link_id: None,
                     device: None,
+                    online_only: kind == Kind::File && r.attributes & ONLINE_ONLY != 0,
                 });
             }
         }

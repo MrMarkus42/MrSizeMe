@@ -2,8 +2,11 @@
 
 pub mod ai;
 pub mod applog;
+pub mod apps;
 pub mod category;
+pub mod cloud;
 pub mod disk;
+pub mod duplicates;
 pub mod elevate;
 pub mod export;
 pub mod external;
@@ -13,6 +16,7 @@ pub mod i18n;
 pub mod knowledge;
 pub mod live;
 pub mod mft;
+pub mod mover;
 pub mod platform;
 pub mod query;
 pub mod scan;

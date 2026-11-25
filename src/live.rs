@@ -314,6 +314,10 @@ pub fn apply_listing(
                     tree.set_file_values(id, e.size, e.allocated, e.modified);
                     changed = true;
                 }
+                if tree.node(id).has(flags::ONLINE_ONLY) != e.online_only {
+                    tree.set_flag(id, flags::ONLINE_ONLY, e.online_only);
+                    changed = true;
+                }
             }
             old => {
                 if let Some(&id) = old {
@@ -324,6 +328,9 @@ pub fn apply_listing(
                 n.size = e.size;
                 n.allocated = e.allocated;
                 n.modified = e.modified;
+                if e.online_only {
+                    n.flags |= flags::ONLINE_ONLY;
+                }
                 let scan_it = e.kind == Kind::Dir && !platform::is_skipped(&path, skip);
                 if e.kind == Kind::Dir {
                     n.flags |= if scan_it { flags::NOT_SCANNED } else { flags::SKIPPED };

@@ -357,8 +357,8 @@ fn changes_table(ui: &mut egui::Ui, t: &Texts, tree: &Tree, c: &Compared, action
                 for ch in &c.changes {
                     body.row(ROW, |mut row| {
                         row.col(|ui| {
-                            let icon = if ch.is_dir { "📁" } else { "📄" };
-                            let text = format!("{icon} {}", ch.path.display());
+                            let slash = if ch.is_dir { "/" } else { "" };
+                            let text = format!("{}{slash}", ch.path.display());
                             let found = tree.find(&tree.root_path.join(&ch.path)).filter(|&id| id != ROOT);
                             let resp = ui.add(egui::Label::new(text).truncate().sense(egui::Sense::click()));
                             if let Some(id) = found

@@ -40,6 +40,8 @@ pub mod flags {
     pub const NOT_SCANNED: u8 = 8;
     /// Moved to the recycle bin; no longer listed under its parent.
     pub const REMOVED: u8 = 16;
+    /// A cloud file that is only online; its content is not on this computer.
+    pub const ONLINE_ONLY: u8 = 32;
 }
 
 #[derive(Debug, Clone)]
@@ -322,6 +324,16 @@ impl Tree {
         n.modified = modified;
         let after = self.share(id);
         self.adjust_above(id, before, after, modified);
+    }
+
+    /// Sets or clears a flag of one node.
+    pub fn set_flag(&mut self, id: NodeId, flag: u8, on: bool) {
+        let n = &mut self.nodes[id as usize];
+        if on {
+            n.flags |= flag;
+        } else {
+            n.flags &= !flag;
+        }
     }
 
     /// Adds one more entry to a folder (live update) and returns its id.

@@ -189,3 +189,69 @@ fn history_screenshots() {
         h.render().unwrap().save(out.join(format!("{name}.png"))).unwrap();
     }
 }
+
+/// Cloud folder and programs with made-up data.
+fn cloud_app() -> App {
+    use mrsizeme::apps::App as Program;
+    use mrsizeme::cloud::Root;
+    use mrsizeme::tree::flags;
+    let mut t = Tree::new(PathBuf::from("/home/beispiel"), Kind::Dir);
+    let dir = |n: &str| Node::new(OsStr::new(n).into(), NO_PARENT, Kind::Dir);
+    let file = |n: &str, mb: u64, online: bool| {
+        let mut f = Node::new(OsStr::new(n).into(), NO_PARENT, Kind::File);
+        f.size = mb << 20;
+        f.allocated = if online { 0 } else { f.size };
+        if online {
+            f.flags |= flags::ONLINE_ONLY;
+        }
+        f
+    };
+    let top = t.add_children(ROOT, [dir("OneDrive"), dir("Spiele"), dir(".config")]);
+    let od = t.add_children(top, [dir("Fotos"), dir("Dokumente"), dir("Videos")]);
+    t.add_children(od, [file("urlaub-2025.zip", 2400, false), file("hochzeit.zip", 5100, true)]);
+    t.add_children(od + 1, [file("steuer.pdf", 12, false), file("archiv.zip", 800, true)]);
+    t.add_children(od + 2, [file("geburtstag.mp4", 3900, false)]);
+    let games = t.add_children(top + 1, [dir("Weltraum"), dir("Rennen")]);
+    t.add_children(games, [file("daten.pak", 18_000, false)]);
+    t.add_children(games + 1, [file("strecken.pak", 7_500, false)]);
+    let cfg = t.add_children(top + 2, [dir("Weltraum")]);
+    t.add_children(cfg, [file("shader-cache.bin", 900, false)]);
+    t.sum_up();
+    let roots = vec![Root { name: "OneDrive".into(), path: PathBuf::from("/home/beispiel/OneDrive") }];
+    let program = |name: &str, dir: &str, data: &[&str]| Program {
+        name: name.into(),
+        location: Some(PathBuf::from(format!("/home/beispiel/Spiele/{dir}"))),
+        data: data.iter().map(|d| PathBuf::from(format!("/home/beispiel/{d}"))).collect(),
+        reported: None,
+    };
+    let programs = vec![
+        program("Weltraum-Abenteuer", "Weltraum", &[".config/Weltraum"]),
+        program("Rennspiel", "Rennen", &[]),
+    ];
+    App::with_tree(t).with_cloud_roots(roots).with_apps(programs)
+}
+
+#[test]
+#[ignore]
+fn stage7_screenshots() {
+    for (dark, name, click) in [(false, "cloud-hell", "Cloud"), (true, "programme-dunkel", "Programme")] {
+        common::setup();
+        i18n::set_lang(Lang::De);
+        let theme = if dark { egui::Theme::Dark } else { egui::Theme::Light };
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(1400.0, 820.0))
+            .with_max_steps(64)
+            .with_theme(theme)
+            .wgpu()
+            .build_eframe(move |cc| {
+                cc.egui_ctx.set_theme(theme);
+                cloud_app()
+            });
+        h.run();
+        h.get_by_label(click).click();
+        h.run();
+        let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/ui-screenshots");
+        std::fs::create_dir_all(&out).unwrap();
+        h.render().unwrap().save(out.join(format!("{name}.png"))).unwrap();
+    }
+}

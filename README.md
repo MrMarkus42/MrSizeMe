@@ -29,6 +29,8 @@ up safely. It runs on Windows, macOS and Linux and speaks German and English.
 * History of earlier scans with comparison, size chart and forecast when
   the disk will be full; warning when a disk is nearly full.
 * Live update: the numbers follow changes on the disk without a new scan.
+* Duplicate files, cloud folders with "keep only online", space per
+  program, and a move assistant for large folders.
 * German and English, light and dark mode.
 
 ## Building

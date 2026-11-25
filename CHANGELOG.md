@@ -59,3 +59,15 @@
   new, changed and deleted files without a new scan (read-only; on Linux
   up to 100,000 subfolders).
 - New "History" tab in the menu band; date and time in local time.
+- Duplicate files: files of equal size are compared by SHA-256 checksum
+  (first 64 KiB, then the whole file); cloud files that are only online are
+  never read. Each copy can go to the recycle bin.
+- Cloud folders (OneDrive, iCloud Drive, Dropbox and other cloud services):
+  space on this computer versus only online, and "Keep only online"
+  (Windows: cloud file API; macOS: brctl / fileproviderctl).
+- Programs view: space per program = program folder + data and caches
+  (Windows uninstall list, macOS .app bundles, Linux Flatpak/Snap/menu).
+- Move assistant: moves a folder to another disk; copies, checks every
+  file, only then removes the original (recycle bin or delete) and can put
+  a link at the old place (junction on Windows, symbolic link elsewhere).
+- Cloud files that are only online are marked during the scan.

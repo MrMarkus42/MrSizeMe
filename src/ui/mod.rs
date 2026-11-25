@@ -10,6 +10,7 @@ mod paint;
 mod places;
 mod ribbon;
 mod ring;
+mod tools;
 
 use std::collections::HashSet;
 use std::io;
@@ -41,6 +42,9 @@ pub enum View {
     Search,
     Cleanup,
     History,
+    Duplicates,
+    Cloud,
+    Apps,
 }
 
 /// The chart on the right side.
@@ -127,6 +131,8 @@ pub(crate) enum Action {
     AskTrash(NodeId),
     /// Select a node, open the folders above it and show it in the folder list.
     Reveal(NodeId),
+    /// Open the move assistant for a folder.
+    AskMove(NodeId),
 }
 
 pub struct App {
@@ -183,6 +189,16 @@ pub struct App {
     /// The tree is too large to be watched on this system.
     live_too_large: bool,
     warn: Warn,
+    dups: tools::Dups,
+    /// Cloud folders of this computer (found when first shown).
+    cloud_roots: Option<Vec<crate::cloud::Root>>,
+    cloud_cache: Option<Cached<Vec<tools::CloudPart>>>,
+    /// Installed programs (read when first shown).
+    apps_list: Option<Vec<crate::apps::App>>,
+    apps_cache: Option<Cached<Vec<crate::apps::Usage>>>,
+    mover: tools::Move,
+    /// Waiting for the answer to "keep only online".
+    free_up_ask: Option<tools::FreeUpRequest>,
 }
 
 /// The check for nearly full disks.
@@ -249,6 +265,20 @@ impl App {
         self
     }
 
+    /// Uses these cloud folders instead of looking for them (tests).
+    #[doc(hidden)]
+    pub fn with_cloud_roots(mut self, roots: Vec<crate::cloud::Root>) -> Self {
+        self.cloud_roots = Some(roots);
+        self
+    }
+
+    /// Uses this list of programs instead of asking the system (tests).
+    #[doc(hidden)]
+    pub fn with_apps(mut self, apps: Vec<crate::apps::App>) -> Self {
+        self.apps_list = Some(apps);
+        self
+    }
+
     fn empty() -> Self {
         Self {
             path_text: String::new(),
@@ -295,6 +325,13 @@ impl App {
             live: None,
             live_too_large: false,
             warn: Warn::default(),
+            dups: tools::Dups::default(),
+            cloud_roots: None,
+            cloud_cache: None,
+            apps_list: None,
+            apps_cache: None,
+            mover: tools::Move::default(),
+            free_up_ask: None,
         }
     }
 
@@ -310,6 +347,7 @@ impl App {
         self.cleanup.reset();
         self.map_cache = None;
         self.ring_cache = None;
+        self.dups.reset();
         self.hist.reset();
         if let Some(tree) = &self.tree {
             self.hist.reload(self.history_store.as_ref(), &tree.root_path);
@@ -584,6 +622,11 @@ impl App {
                 self.view = View::Folders;
                 self.reveal(id);
             }
+            Action::AskMove(id) => {
+                if id != ROOT && tree.node(id).is_dir() {
+                    self.mover.open(tree, id);
+                }
+            }
             Action::Sort(key) => {
                 self.sort = if self.sort.0 == key { (key, !self.sort.1) } else { (key, false) };
                 if let Some(tree) = &mut self.tree {
@@ -608,23 +651,10 @@ impl App {
             return;
         }
         let path = tree.path(id);
-        let (size, parent) = (tree.node(id).size, tree.node(id).parent);
-        let map_inside = tree.ancestors(self.map_root).contains(&id);
+        let size = tree.node(id).size;
         match crate::trash::move_to_trash(&path) {
             Ok(external::Outcome::Done) => {
-                if let Some(tree) = &mut self.tree {
-                    tree.remove(id);
-                }
-                self.generation += 1;
-                self.map_cache = None;
-                self.ring_cache = None;
-                if self.selected == Some(id) {
-                    self.selected = Some(parent);
-                }
-                if map_inside {
-                    self.map_root = parent;
-                }
-                self.cleanup.info = None;
+                self.take_out(id);
                 let text = format!("{}: {}", tr().trash_done, format::size(size));
                 self.notice = Some((text, Instant::now()));
             }
@@ -637,6 +667,27 @@ impl App {
                 format::io_error(&e)
             )),
         }
+    }
+
+    /// Takes a node out of the tree after it left the disk (recycle bin, moved).
+    fn take_out(&mut self, id: NodeId) {
+        let Some(tree) = &mut self.tree else { return };
+        if id == ROOT || (id as usize) >= tree.len() {
+            return;
+        }
+        let parent = tree.node(id).parent;
+        let map_inside = tree.ancestors(self.map_root).contains(&id);
+        tree.remove(id);
+        self.generation += 1;
+        self.map_cache = None;
+        self.ring_cache = None;
+        if self.selected == Some(id) {
+            self.selected = Some(parent);
+        }
+        if map_inside {
+            self.map_root = parent;
+        }
+        self.cleanup.info = None;
     }
 
     fn export_csv(&mut self) {
@@ -771,6 +822,11 @@ impl App {
                         });
                         column(ui, |ui| {
                             list(ui, View::Search, Icon::Search, t.view_search);
+                            list(ui, View::Duplicates, Icon::Duplicates, t.view_duplicates);
+                            list(ui, View::Apps, Icon::Apps, t.view_apps);
+                        });
+                        column(ui, |ui| {
+                            list(ui, View::Cloud, Icon::Cloud, t.view_cloud);
                         });
                     });
                     group(ui, t.grp_chart, |ui| {
@@ -854,6 +910,29 @@ impl App {
                             .clicked()
                         {
                             self.view = View::Cleanup;
+                        }
+                    });
+                    group(ui, t.grp_find, |ui| {
+                        if big(
+                            ui,
+                            Icon::Duplicates,
+                            t.btn_duplicates,
+                            has_tree,
+                            self.view == View::Duplicates,
+                        )
+                        .clicked()
+                        {
+                            self.view = View::Duplicates;
+                        }
+                    });
+                    group(ui, t.grp_move, |ui| {
+                        let dir = sel.filter(|&i| {
+                            i != ROOT && self.tree.as_ref().is_some_and(|tr| tr.node(i).is_dir())
+                        });
+                        if big(ui, Icon::Move, t.btn_move, dir.is_some() && !busy, false).clicked()
+                            && let Some(id) = dir
+                        {
+                            cmds.push(Command::Node(Action::AskMove(id)));
                         }
                     });
                     group(ui, t.grp_ai, |ui| {
@@ -1157,6 +1236,47 @@ impl App {
                 self.show_error(e);
             }
         }
+        if let Some((path, name, size)) = self.free_up_ask.clone() {
+            let mut open = true;
+            let mut decided = None;
+            egui::Window::new(t.cloud_free_up)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .default_pos(center)
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(false)
+                .default_width(420.0)
+                .show(ctx, |ui| {
+                    let q = t
+                        .cloud_free_up_question
+                        .replace("{name}", &name)
+                        .replace("{size}", &format::size(size));
+                    ui.label(q);
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        if ui.button(t.cloud_free_up).clicked() {
+                            decided = Some(true);
+                        }
+                        if ui.button(t.cancel).clicked() {
+                            decided = Some(false);
+                        }
+                    });
+                });
+            if !open || decided.is_some() {
+                self.free_up_ask = None;
+            }
+            if decided == Some(true) {
+                match crate::cloud::free_up(&path) {
+                    Ok(_) => self.notice = Some((t.cloud_free_up_done.to_string(), Instant::now())),
+                    Err(e) => self.show_error(format!(
+                        "{}
+{}",
+                        path.display(),
+                        format::io_error(&e)
+                    )),
+                }
+            }
+        }
         if self.hist.confirm_clear {
             let mut open = true;
             let mut decided = None;
@@ -1332,6 +1452,9 @@ impl App {
                 (View::Search, t.view_search),
                 (View::Cleanup, t.view_cleanup),
                 (View::History, t.view_history),
+                (View::Duplicates, t.view_duplicates),
+                (View::Cloud, t.view_cloud),
+                (View::Apps, t.view_apps),
             ] {
                 ui.selectable_value(&mut self.view, view, label);
             }
@@ -1379,6 +1502,23 @@ impl App {
             }
             // Suggestions always cover the whole scan.
             View::Cleanup => cleanup::list(ui, tree, ROOT, generation, &mut self.cleanup),
+            View::Duplicates => tools::duplicates(ui, tree, generation, &mut self.dups),
+            View::Cloud => {
+                let roots = self.cloud_roots.get_or_insert_with(crate::cloud::roots);
+                let parts =
+                    refresh(&mut self.cloud_cache, generation, ROOT, || tools::cloud_parts(tree, roots));
+                let (acts, request) = tools::cloud(ui, tree, parts);
+                if request.is_some() {
+                    self.free_up_ask = request;
+                }
+                acts
+            }
+            View::Apps => {
+                let list = self.apps_list.get_or_insert_with(crate::apps::installed);
+                let usage =
+                    refresh(&mut self.apps_cache, generation, ROOT, || crate::apps::measure(tree, list));
+                tools::programs(ui, tree, usage)
+            }
             View::History => {
                 // At first the newest earlier scan is compared.
                 if !self.hist.auto_done {
@@ -1545,6 +1685,12 @@ impl App {
         });
         if let Some(i) = self.hist.pending_compare.take() {
             self.compare_with(i);
+        }
+        self.dups.poll(&ctx);
+        match tools::move_window(&ctx, &mut self.mover) {
+            Some(tools::MoveEvent::Moved(id)) => self.take_out(id),
+            Some(tools::MoveEvent::Failed(e)) => self.show_error(e),
+            None => {}
         }
         self.dialogs(&ctx);
         self.cleanup.poll(&ctx);

@@ -36,7 +36,7 @@ fn background(ui: &Ui, rect: Rect, resp: &Response, enabled: bool, selected: boo
 pub fn big(ui: &mut Ui, icon: Icon, label: &str, enabled: bool, selected: bool) -> Response {
     let (ink, paper) = colors(ui);
     let text_color = if enabled { ui.visuals().text_color() } else { ui.visuals().weak_text_color() };
-    let galley = ui.painter().layout(label.to_owned(), FontId::proportional(12.0), text_color, 96.0);
+    let galley = ui.painter().layout(label.to_owned(), FontId::proportional(12.0), text_color, 120.0);
     let w = galley.size().x.max(40.0) + 12.0;
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(vec2(w, BAND), sense);

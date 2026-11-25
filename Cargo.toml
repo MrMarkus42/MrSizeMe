@@ -30,6 +30,8 @@ sys-locale = "0.3"
 serde_json = "1"
 # Live update: tells the program when files change after a scan.
 notify = { version = "8.2", default-features = false, features = ["macos_fsevent"] }
+# Checksums: duplicate search and checking downloaded updates.
+sha2 = "0.11"
 
 [target.'cfg(unix)'.dependencies]
 # Free space of a disk (statvfs).
@@ -40,7 +42,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_Security_Credentials",
+    "Win32_Storage_CloudFilters",
     "Win32_Storage_FileSystem",
+    "Win32_System_IO",
     "Win32_System_Registry",
     "Win32_System_Threading",
     "Win32_System_Time",

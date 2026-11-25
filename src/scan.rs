@@ -235,6 +235,9 @@ fn collect(
             {
                 n.flags |= flags::HARDLINK_DUP;
             }
+            if e.online_only {
+                n.flags |= flags::ONLINE_ONLY;
+            }
             if e.kind == Kind::Dir {
                 let path = job.path.join(&*n.name);
                 let other_fs = root_device.is_some() && e.device.is_some() && e.device != root_device;
