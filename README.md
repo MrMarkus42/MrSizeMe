@@ -26,6 +26,9 @@ up safely. It runs on Windows, macOS and Linux and speaks German and English.
   recycle bin with protection of system folders, and an optional AI
   question (Google, local Ollama, Gemini, Claude) that shows exactly what
   is sent.
+* History of earlier scans with comparison, size chart and forecast when
+  the disk will be full; warning when a disk is nearly full.
+* Live update: the numbers follow changes on the disk without a new scan.
 * German and English, light and dark mode.
 
 ## Building

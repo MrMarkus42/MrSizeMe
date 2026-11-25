@@ -3,12 +3,15 @@
 pub mod ai;
 pub mod applog;
 pub mod category;
+pub mod disk;
 pub mod elevate;
 pub mod export;
 pub mod external;
 pub mod format;
+pub mod history;
 pub mod i18n;
 pub mod knowledge;
+pub mod live;
 pub mod mft;
 pub mod platform;
 pub mod query;

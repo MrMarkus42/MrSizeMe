@@ -7,6 +7,8 @@ use crate::i18n::tr;
 pub struct Place {
     pub label: String,
     pub path: PathBuf,
+    /// A whole disk (not the home folder).
+    pub drive: bool,
 }
 
 pub fn list() -> Vec<Place> {
@@ -14,7 +16,7 @@ pub fn list() -> Vec<Place> {
     imp::drives(&mut v);
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" });
     if let Some(home) = home.map(PathBuf::from).filter(|p| p.is_absolute()) {
-        v.push(Place { label: tr().home_folder.to_string(), path: home });
+        v.push(Place { label: tr().home_folder.to_string(), path: home, drive: false });
     }
     v
 }
@@ -32,7 +34,7 @@ mod imp {
         for i in 0..26u8 {
             if mask & (1 << i) != 0 {
                 let label = format!("{}:\\", char::from(b'A' + i));
-                v.push(Place { path: label.clone().into(), label });
+                v.push(Place { path: label.clone().into(), label, drive: true });
             }
         }
     }
@@ -43,14 +45,18 @@ mod imp {
     use super::Place;
 
     pub fn drives(v: &mut Vec<Place>) {
-        v.push(Place { label: "/".into(), path: "/".into() });
+        v.push(Place { label: "/".into(), path: "/".into(), drive: true });
         if let Ok(rd) = std::fs::read_dir("/Volumes") {
             for e in rd.flatten() {
                 // The system disk appears here once more as a link to "/".
                 if e.file_type().is_ok_and(|t| t.is_symlink()) {
                     continue;
                 }
-                v.push(Place { label: e.file_name().to_string_lossy().into_owned(), path: e.path() });
+                v.push(Place {
+                    label: e.file_name().to_string_lossy().into_owned(),
+                    path: e.path(),
+                    drive: true,
+                });
             }
         }
     }
@@ -61,11 +67,11 @@ mod imp {
     use super::Place;
 
     pub fn drives(v: &mut Vec<Place>) {
-        v.push(Place { label: "/".into(), path: "/".into() });
+        v.push(Place { label: "/".into(), path: "/".into(), drive: true });
         let Ok(mounts) = std::fs::read_to_string("/proc/self/mounts") else { return };
         for point in real_mount_points(&mounts) {
             if point != "/" && !v.iter().any(|p| p.path.as_os_str() == point.as_str()) {
-                v.push(Place { label: point.clone(), path: point.into() });
+                v.push(Place { label: point.clone(), path: point.into(), drive: true });
             }
         }
     }

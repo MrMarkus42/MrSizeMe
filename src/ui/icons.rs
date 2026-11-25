@@ -47,6 +47,10 @@ pub enum Icon {
     Gear,
     Offline,
     Broom,
+    History,
+    Live,
+    Bell,
+    Bookmark,
 }
 
 const BLUE: Color32 = Color32::from_rgb(59, 130, 246);
@@ -409,6 +413,28 @@ pub fn draw(p: &Painter, rect: Rect, icon: Icon, ink: Color32, paper: Color32, e
             for (x0, y0) in [(5.0, 18.0), (7.0, 19.5)] {
                 pen.line(&[(x0, y0), (x0 + 3.0, y0 - 4.0)]);
             }
+        }
+        Icon::History => {
+            pen.circle(12.0, 12.0, 9.0, teal.gamma_multiply(0.3));
+            pen.line(&[(12.0, 6.5), (12.0, 12.0), (16.0, 14.5)]);
+            pen.arrow_head((4.2, 8.0), vec2(-0.4, 1.0), teal);
+        }
+        Icon::Live => {
+            let pts =
+                [(2.0, 13.0), (7.0, 13.0), (9.0, 6.0), (12.5, 19.0), (15.0, 9.5), (17.0, 13.0), (22.0, 13.0)];
+            let pts: Vec<Pos2> = pts.iter().map(|&(x, y)| pen.at(x, y)).collect();
+            pen.p.add(Shape::line(pts, Stroke::new(w * 1.4, green)));
+        }
+        Icon::Bell => {
+            pen.closed(
+                &[(12.0, 4.0), (16.0, 5.5), (17.5, 9.0), (18.5, 17.5), (5.5, 17.5), (6.5, 9.0), (8.0, 5.5)],
+                amber,
+            );
+            pen.line(&[(3.5, 17.5), (20.5, 17.5)]);
+            pen.circle(12.0, 20.3, 1.7, ink);
+        }
+        Icon::Bookmark => {
+            pen.closed(&[(7.0, 3.0), (17.0, 3.0), (17.0, 21.0), (12.0, 16.5), (7.0, 21.0)], blue);
         }
         Icon::Keyboard => {
             pen.boxed(2.0, 6.5, 20.0, 11.0, paper);

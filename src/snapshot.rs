@@ -17,7 +17,7 @@ const SYSTEM: u8 = if cfg!(windows) { 1 } else { 0 };
 const MAX_NAME: usize = 1 << 16;
 const MAX_NODES: usize = 1 << 28;
 
-fn os_bytes(s: &OsStr) -> Vec<u8> {
+pub(crate) fn os_bytes(s: &OsStr) -> Vec<u8> {
     #[cfg(unix)]
     {
         use std::os::unix::ffi::OsStrExt;

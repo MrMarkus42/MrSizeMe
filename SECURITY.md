@@ -38,5 +38,11 @@ public issue. You will get an answer within a few days.
   window checks every number of that result before using it.
 * **Raw disk data is checked.** The fast NTFS scan reads the master file
   table directly; every record is checked, broken records are skipped.
+* **The history stays on this computer.** It holds only names and sizes of
+  the larger folders and files (no contents) in the program's settings
+  folder, can be switched off (“Keep scans”) and deleted with one click.
+  Saved files are checked before use; a damaged file is skipped.
+* **Watching only reads.** The live update and the disk warning only read
+  names, sizes and free space; they never change anything on the disk.
 * **Tests stay inside.** One central switch blocks every outside action
   (opening programs or web pages) in all tests.

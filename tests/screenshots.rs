@@ -132,3 +132,60 @@ fn screenshots() {
     );
     shot(false, Lang::En, "main-window-light-en", &["Ring chart", "Categories"]);
 }
+
+/// The home folder at step `s` of a month: downloads and caches grow.
+fn grown(s: u64) -> Tree {
+    let mut t = Tree::new(PathBuf::from("/home/beispiel"), Kind::Dir);
+    let dir = |n: &str| Node::new(OsStr::new(n).into(), NO_PARENT, Kind::Dir);
+    let file = |n: &str, mb: u64| {
+        let mut f = Node::new(OsStr::new(n).into(), NO_PARENT, Kind::File);
+        f.size = mb << 20;
+        f.allocated = f.size;
+        f
+    };
+    let top = t.add_children(ROOT, [dir("Downloads"), dir(".cache"), dir("Videos")]);
+    t.add_children(top, [file("urlaub.zip", 600 * s + 100), file("setup-alt.exe", 800)]);
+    t.add_children(top + 1, [file("browser-cache.bin", 300 + 280 * s)]);
+    t.add_children(top + 2, [file("film.mkv", 6400)]);
+    t.sum_up();
+    t
+}
+
+#[test]
+#[ignore]
+fn history_screenshots() {
+    use mrsizeme::disk::Space;
+    use mrsizeme::history::Store;
+    for (dark, name) in [(false, "verlauf-hell"), (true, "verlauf-dunkel")] {
+        common::setup();
+        i18n::set_lang(Lang::De);
+        let dir = common::TempDir::new();
+        let store = Store::at(dir.path().join("history"));
+        let now = mrsizeme::query::now();
+        let gib = 1u64 << 30;
+        for s in 0..5u64 {
+            let space = Some(Space { total: 500 * gib, free: 60 * gib - s * 4 * gib });
+            store.save(&grown(s), now - (5 - s as i64) * 6 * 86_400, space).unwrap();
+        }
+        store.save(&grown(5), now, Some(Space { total: 500 * gib, free: 40 * gib })).unwrap();
+        let theme = if dark { egui::Theme::Dark } else { egui::Theme::Light };
+        let path = dir.path().join("history");
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(1400.0, 860.0))
+            .with_max_steps(64)
+            .with_theme(theme)
+            .wgpu()
+            .build_eframe(move |cc| {
+                cc.egui_ctx.set_theme(theme);
+                App::with_history(grown(5), path.clone(), Some(now))
+            });
+        h.run();
+        h.get_all_by_label("Verlauf").next().unwrap().click();
+        h.run();
+        h.get_by_label("Verlauf & Vergleich").click();
+        h.run();
+        let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/ui-screenshots");
+        std::fs::create_dir_all(&out).unwrap();
+        h.render().unwrap().save(out.join(format!("{name}.png"))).unwrap();
+    }
+}

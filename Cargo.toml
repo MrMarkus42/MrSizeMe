@@ -28,6 +28,12 @@ log = "0.4"
 # Language of the operating system (for the default language).
 sys-locale = "0.3"
 serde_json = "1"
+# Live update: tells the program when files change after a scan.
+notify = { version = "8.2", default-features = false, features = ["macos_fsevent"] }
+
+[target.'cfg(unix)'.dependencies]
+# Free space of a disk (statvfs).
+libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
@@ -37,6 +43,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_Storage_FileSystem",
     "Win32_System_Registry",
     "Win32_System_Threading",
+    "Win32_System_Time",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }

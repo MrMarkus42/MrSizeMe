@@ -193,3 +193,100 @@ fn cleanup_info_trash_question_and_ai() {
     h.run();
     assert!(h.query_all_by_label_contains("ist eingeschaltet").next().is_some());
 }
+
+#[test]
+fn low_space_warning_can_be_hidden() {
+    use mrsizeme::disk::{Low, Space};
+    let _guard = lock();
+    setup();
+    i18n::set_lang(Lang::De);
+    let gib = 1u64 << 30;
+    let low = vec![Low {
+        label: "C:\\".into(),
+        path: "C:\\".into(),
+        space: Space { total: 500 * gib, free: 20 * gib },
+    }];
+    let mut h = Harness::builder()
+        .with_size(eframe::egui::vec2(1200.0, 760.0))
+        .with_max_steps(32)
+        .build_eframe(move |_cc| App::with_tree(project(10)).with_low_disks(low.clone()));
+    h.run();
+    assert!(h.query_all_by_label_contains("Wenig Platz: Auf C:\\ sind nur noch 4 % frei").next().is_some());
+    h.get_by_label("Ausblenden").click();
+    h.run();
+    assert!(h.query_all_by_label_contains("Wenig Platz").next().is_none());
+}
+
+/// The made-up project folder with a node_modules of the given size in MiB.
+fn project(mib: u64) -> mrsizeme::tree::Tree {
+    use mrsizeme::tree::{Kind, NO_PARENT, Node, ROOT, Tree};
+    use std::ffi::OsStr;
+    let mut t = Tree::new(std::path::PathBuf::from("/projekte/web"), Kind::Dir);
+    let dir = |n: &str| Node::new(OsStr::new(n).into(), NO_PARENT, Kind::Dir);
+    let file = |n: &str, size: u64| {
+        let mut f = Node::new(OsStr::new(n).into(), NO_PARENT, Kind::File);
+        f.size = size;
+        f
+    };
+    let first = t.add_children(ROOT, [dir("node_modules"), file("video.mp4", 50 << 20)]);
+    t.add_children(first, [file("bundle.js", mib << 20)]);
+    t.sum_up();
+    t
+}
+
+#[test]
+fn history_compare_forecast_and_clear() {
+    use mrsizeme::disk::Space;
+    use mrsizeme::history::Store;
+    let _guard = lock();
+    setup();
+    i18n::set_lang(Lang::De);
+    let dir = TempDir::new();
+    let store = Store::at(dir.path().join("history"));
+    let now = mrsizeme::query::now();
+    let day = 86_400;
+    let gib = 1u64 << 30;
+    // Two earlier scans: the folder grows, the disk fills by 1 GiB a day.
+    for (days_ago, mib, free) in [(10, 100, 40 * gib), (3, 250, 33 * gib)] {
+        let space = Some(Space { total: 500 * gib, free });
+        store.save(&project(mib), now - days_ago * day, space).unwrap();
+    }
+    let dir_path = dir.path().join("history");
+    let mut h = Harness::builder()
+        .with_size(eframe::egui::vec2(1300.0, 860.0))
+        .with_max_steps(32)
+        .build_eframe(move |_cc| App::with_history(project(400), dir_path.clone(), None));
+    h.run();
+
+    // The menu band tab comes first, then its large button opens the list.
+    h.get_all_by_label("Verlauf").next().unwrap().click();
+    h.run();
+    h.get_by_label("Verlauf & Vergleich").click();
+    h.run();
+    // Compared with the newest earlier scan: bundle.js grew by 150 MiB.
+    assert!(h.query_all_by_label_contains("gewachsen").next().is_some());
+    assert!(h.query_all_by_label_contains("bundle.js").next().is_some());
+    assert!(h.query_all_by_label_contains("pro Monat").next().is_some());
+    assert!(h.query_all_by_label_contains("voll").next().is_some());
+
+    // Compare with the oldest scan instead.
+    h.get_all_by_label("Vergleichen").last().unwrap().click();
+    h.run();
+    assert!(h.query_all_by_label_contains("+300").next().is_some());
+
+    // A click on a change shows it in the folder list.
+    h.query_all_by_label_contains("bundle.js").last().unwrap().click();
+    h.run();
+    assert!(h.query_by_label("Größe ⏷").is_some() || h.query_by_label("node_modules").is_some());
+
+    // Keep scans off and on, then delete the history (only the test folder).
+    h.get_by_label("Scans merken").click();
+    h.run();
+    h.get_by_label("Verlauf löschen").click();
+    h.run();
+    assert!(h.query_all_by_label_contains("Den ganzen Verlauf löschen").next().is_some());
+    h.get_by_label("Löschen").click();
+    h.run();
+    assert!(!dir.path().join("history").exists());
+    assert!(h.query_by_label("Fehler").is_none());
+}

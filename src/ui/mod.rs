@@ -2,6 +2,7 @@
 
 mod cleanup;
 mod folders;
+mod history_view;
 mod icons;
 mod lists;
 mod map;
@@ -39,6 +40,7 @@ pub enum View {
     Age,
     Search,
     Cleanup,
+    History,
 }
 
 /// The chart on the right side.
@@ -80,6 +82,7 @@ pub enum Tab {
     Start,
     View,
     Cleanup,
+    History,
     Help,
 }
 
@@ -100,6 +103,11 @@ pub(crate) enum Command {
     Shortcuts,
     SearchView,
     ToggleOffline,
+    ToggleKeepHistory,
+    AskClearHistory,
+    ToggleLive,
+    SetWarn(u8),
+    CheckSpace,
     SetLang(Lang),
     Node(Action),
 }
@@ -117,6 +125,8 @@ pub(crate) enum Action {
     Info(NodeId),
     /// Ask whether to move the node to the recycle bin.
     AskTrash(NodeId),
+    /// Select a node, open the folders above it and show it in the folder list.
+    Reveal(NodeId),
 }
 
 pub struct App {
@@ -162,6 +172,38 @@ pub struct App {
     settings: crate::settings::Settings,
     /// Settings are saved (not in tests).
     persist: bool,
+    /// Where the summaries of earlier scans are kept (none in tests).
+    history_store: Option<crate::history::Store>,
+    hist: history_view::State,
+    /// When the shown tree was scanned.
+    scan_time: Option<i64>,
+    /// Live update and the disk warning start by themselves (not in tests).
+    auto: bool,
+    live: Option<crate::live::Live>,
+    /// The tree is too large to be watched on this system.
+    live_too_large: bool,
+    warn: Warn,
+}
+
+/// The check for nearly full disks.
+#[derive(Default)]
+struct Warn {
+    low: Vec<crate::disk::Low>,
+    /// Warnings the user hid (until the program starts again).
+    hidden: HashSet<PathBuf>,
+    job: Option<JoinHandle<Vec<crate::disk::Low>>>,
+    last: Option<Instant>,
+    /// Started with "Check now": report also when all is well.
+    manual: bool,
+}
+
+/// Disks are checked again after this time.
+const WARN_EVERY: Duration = Duration::from_secs(10 * 60);
+
+/// True if no folder above the node (or the node itself) was taken out.
+fn reachable(tree: &Tree, id: NodeId) -> bool {
+    (id as usize) < tree.len()
+        && tree.ancestors(id).iter().all(|&a| !tree.node(a).has(crate::tree::flags::REMOVED))
 }
 
 impl App {
@@ -170,6 +212,8 @@ impl App {
         let mut app = Self::empty();
         app.settings = crate::settings::Settings::load();
         app.persist = true;
+        app.auto = true;
+        app.history_store = crate::history::Store::default_location();
         if let Some(l) = app.settings.lang {
             i18n::set_lang(l);
         }
@@ -186,6 +230,23 @@ impl App {
         app.path_text = tree.root_path.display().to_string();
         app.set_tree(tree);
         app
+    }
+
+    /// A window with an existing scan and a history in the given folder (tests).
+    pub fn with_history(tree: Tree, history_dir: PathBuf, scan_time: Option<i64>) -> Self {
+        let mut app = Self::empty();
+        app.path_text = tree.root_path.display().to_string();
+        app.history_store = Some(crate::history::Store::at(history_dir));
+        app.scan_time = scan_time;
+        app.set_tree(tree);
+        app
+    }
+
+    /// Shows the warning for these disks as if the check had found them (tests).
+    #[doc(hidden)]
+    pub fn with_low_disks(mut self, low: Vec<crate::disk::Low>) -> Self {
+        self.warn.low = low;
+        self
     }
 
     fn empty() -> Self {
@@ -227,6 +288,13 @@ impl App {
             cleanup: cleanup::State::default(),
             settings: crate::settings::Settings::default(),
             persist: false,
+            history_store: None,
+            hist: history_view::State::default(),
+            scan_time: None,
+            auto: false,
+            live: None,
+            live_too_large: false,
+            warn: Warn::default(),
         }
     }
 
@@ -242,6 +310,150 @@ impl App {
         self.cleanup.reset();
         self.map_cache = None;
         self.ring_cache = None;
+        self.hist.reset();
+        if let Some(tree) = &self.tree {
+            self.hist.reload(self.history_store.as_ref(), &tree.root_path);
+        }
+        // Watching starts again for the new tree (in `live_poll`).
+        self.live = None;
+        self.live_too_large = false;
+    }
+
+    /// Takes over what the live update found and starts it when needed.
+    fn live_poll(&mut self, ctx: &egui::Context) {
+        if self.live.is_none()
+            && self.auto
+            && self.settings.live
+            && self.running.is_none()
+            && !self.live_too_large
+            && let Some(tree) = &self.tree
+        {
+            if crate::live::supported(tree) {
+                let c = ctx.clone();
+                self.live = Some(crate::live::Live::start(&tree.root_path, move || c.request_repaint()));
+            } else {
+                self.live_too_large = true;
+            }
+        }
+        let (Some(live), Some(tree)) = (&mut self.live, &mut self.tree) else { return };
+        if live.poll(tree, self.sort) {
+            self.generation += 1;
+            self.map_cache = None;
+            self.ring_cache = None;
+            let tree = self.tree.as_ref().expect("checked above");
+            if self.selected.is_some_and(|s| !reachable(tree, s)) {
+                self.selected = Some(ROOT);
+            }
+            if !reachable(tree, self.map_root) {
+                self.map_root = ROOT;
+            }
+            self.expanded.retain(|&e| reachable(tree, e));
+            self.compact_if_needed();
+        }
+        if self.live.as_ref().is_some_and(|l| l.busy()) {
+            ctx.request_repaint_after(Duration::from_millis(150));
+        }
+    }
+
+    /// After many live changes the tree holds many unused entries: copy it tidily.
+    fn compact_if_needed(&mut self) {
+        let Some(tree) = &self.tree else { return };
+        let unused = tree.unused();
+        if unused < 200_000 || unused < tree.len() / 2 {
+            return;
+        }
+        let selected = self.selected.map(|s| tree.path(s));
+        let map_root = tree.path(self.map_root);
+        let expanded: Vec<PathBuf> = self.expanded.iter().map(|&e| tree.path(e)).collect();
+        let tidy = tree.copy(0, usize::MAX, usize::MAX, true);
+        self.selected = Some(selected.and_then(|p| tidy.find(&p)).unwrap_or(ROOT));
+        self.map_root = tidy.find(&map_root).unwrap_or(ROOT);
+        self.expanded = expanded.iter().filter_map(|p| tidy.find(p)).collect();
+        self.expanded.insert(ROOT);
+        self.tree = Some(tidy);
+        self.generation += 1;
+        self.cleanup.reset();
+    }
+
+    /// Checks the disks for free space now and then (in the background).
+    fn warn_poll(&mut self, ctx: &egui::Context) {
+        if let Some(job) = &self.warn.job {
+            if job.is_finished() {
+                let low = self.warn.job.take().and_then(|j| j.join().ok()).unwrap_or_default();
+                if self.warn.manual && low.is_empty() {
+                    self.notice = Some((tr().warn_all_ok.to_string(), Instant::now()));
+                }
+                self.warn.low = low;
+                self.warn.manual = false;
+            } else {
+                ctx.request_repaint_after(Duration::from_millis(200));
+            }
+            return;
+        }
+        if self.auto && self.settings.warn_percent > 0 {
+            if self.warn.last.is_none_or(|l| l.elapsed() >= WARN_EVERY) {
+                self.check_space(false);
+            }
+            ctx.request_repaint_after(WARN_EVERY);
+        }
+    }
+
+    fn check_space(&mut self, manual: bool) {
+        if self.warn.job.is_some() {
+            return;
+        }
+        let disks: Vec<(String, PathBuf)> = self
+            .places
+            .iter()
+            .filter(|p| p.drive && crate::disk::is_fixed(&p.path))
+            .map(|p| (p.label.clone(), p.path.clone()))
+            .collect();
+        let percent = self.settings.warn_percent;
+        self.warn.last = Some(Instant::now());
+        self.warn.manual = manual;
+        self.warn.job = std::thread::Builder::new()
+            .name("disk space".into())
+            .spawn(move || crate::disk::low_disks(&disks, percent))
+            .ok();
+    }
+
+    /// The yellow bar for nearly full disks.
+    fn warning_bar(&mut self, ui: &mut egui::Ui) -> Vec<Command> {
+        let t = tr();
+        let mut cmds = Vec::new();
+        let mut hide = Vec::new();
+        for low in self.warn.low.iter().filter(|l| !self.warn.hidden.contains(&l.path)) {
+            ui.horizontal(|ui| {
+                let text = t
+                    .warn_text
+                    .replace("{disk}", &low.label)
+                    .replace("{pct}", &format!("{:.0} %", low.space.free_percent()))
+                    .replace("{free}", &format::size(low.space.free))
+                    .replace("{total}", &format::size(low.space.total));
+                ui.label(egui::RichText::new(format!("⚠ {text}")).color(ui.visuals().warn_fg_color).strong());
+                if ui.button(t.warn_scan).clicked() {
+                    cmds.push(Command::Scan(low.path.clone()));
+                }
+                if ui.button(t.warn_hide).clicked() {
+                    hide.push(low.path.clone());
+                }
+            });
+        }
+        self.warn.hidden.extend(hide);
+        cmds
+    }
+
+    /// Compares the shown tree with a saved scan.
+    fn compare_with(&mut self, index: usize) {
+        let (Some(store), Some(tree)) = (&self.history_store, &self.tree) else { return };
+        let Some(summary) = self.hist.entries.get(index) else { return };
+        match history_view::compare(store, tree, summary) {
+            Ok(c) => self.hist.compared = Some(c),
+            Err(e) => {
+                let text = format::io_error(&e);
+                self.show_error(text);
+            }
+        }
     }
 
     fn start_scan(&mut self, path: PathBuf) {
@@ -270,6 +482,8 @@ impl App {
             })
             .expect("start scan thread");
         log::info!("scan started{}: {}", if admin { " (admin helper)" } else { "" }, applog::private(&path));
+        // The scan brings fresh numbers; watching starts again afterwards.
+        self.live = None;
         self.running = Some(Running { progress, handle, root: path, started: Instant::now(), admin });
         // An admin scan keeps the old result visible until the new one is there.
         if !admin {
@@ -297,6 +511,16 @@ impl App {
                 );
                 self.last_duration = Some(elapsed);
                 self.admin_tree = r.admin || self.elevated;
+                let time = crate::query::now();
+                self.scan_time = Some(time);
+                if self.settings.history
+                    && let Some(store) = &self.history_store
+                {
+                    let space = crate::disk::space(&tree.root_path).ok();
+                    if let Err(e) = store.save(&tree, time, space) {
+                        log::warn!("history not saved: {}", format::io_error(&e));
+                    }
+                }
                 self.set_tree(tree);
             }
             Ok(Err(e)) if r.admin && crate::elevate::is_cancelled(&e) => {
@@ -356,6 +580,10 @@ impl App {
             // The scanned folder itself is never offered for the recycle bin.
             Action::AskTrash(id) if id != ROOT => self.cleanup.confirm = Some(id),
             Action::AskTrash(_) => {}
+            Action::Reveal(id) => {
+                self.view = View::Folders;
+                self.reveal(id);
+            }
             Action::Sort(key) => {
                 self.sort = if self.sort.0 == key { (key, !self.sort.1) } else { (key, false) };
                 if let Some(tree) = &mut self.tree {
@@ -444,6 +672,7 @@ impl App {
                 (Tab::Start, t.tab_start),
                 (Tab::View, t.tab_view),
                 (Tab::Cleanup, t.tab_cleanup),
+                (Tab::History, t.tab_history),
                 (Tab::Help, t.tab_help),
             ] {
                 ui.selectable_value(&mut self.tab, tab, egui::RichText::new(label).strong());
@@ -647,6 +876,62 @@ impl App {
                         }
                     });
                 }
+                Tab::History => {
+                    group(ui, t.grp_history, |ui| {
+                        if big(ui, Icon::History, t.btn_history_view, has_tree, self.view == View::History)
+                            .clicked()
+                        {
+                            self.view = View::History;
+                        }
+                        column(ui, |ui| {
+                            if small(ui, Icon::Bookmark, t.btn_keep_history, true, self.settings.history)
+                                .on_hover_text(t.tip_keep_history)
+                                .clicked()
+                            {
+                                cmds.push(Command::ToggleKeepHistory);
+                            }
+                            if small(
+                                ui,
+                                Icon::Trash,
+                                t.btn_clear_history,
+                                self.history_store.is_some(),
+                                false,
+                            )
+                            .clicked()
+                            {
+                                cmds.push(Command::AskClearHistory);
+                            }
+                        });
+                    });
+                    group(ui, t.grp_live, |ui| {
+                        if big(ui, Icon::Live, t.btn_live, true, self.settings.live)
+                            .on_hover_text(t.tip_live)
+                            .clicked()
+                        {
+                            cmds.push(Command::ToggleLive);
+                        }
+                    });
+                    group(ui, t.grp_warning, |ui| {
+                        let current = self.settings.warn_percent;
+                        let resp = big(ui, Icon::Bell, t.btn_warning, true, current > 0);
+                        egui::Popup::menu(&resp).show(|ui| {
+                            for p in [0u8, 5, 10, 15, 20] {
+                                let label = if p == 0 {
+                                    t.warn_off.to_string()
+                                } else {
+                                    t.warn_below.replace("{n}", &p.to_string())
+                                };
+                                if ui.selectable_label(current == p, label).clicked() {
+                                    cmds.push(Command::SetWarn(p));
+                                }
+                            }
+                            ui.separator();
+                            if ui.add_enabled(current > 0, egui::Button::new(t.warn_check_now)).clicked() {
+                                cmds.push(Command::CheckSpace);
+                            }
+                        });
+                    });
+                }
                 Tab::Help => {
                     group(ui, t.grp_help, |ui| {
                         if big(ui, Icon::Info, t.about, true, false).clicked() {
@@ -768,6 +1053,31 @@ impl App {
                 self.settings.offline = !self.settings.offline;
                 self.save_settings();
             }
+            Command::ToggleKeepHistory => {
+                self.settings.history = !self.settings.history;
+                self.save_settings();
+            }
+            Command::AskClearHistory => self.hist.confirm_clear = true,
+            Command::ToggleLive => {
+                self.settings.live = !self.settings.live;
+                self.save_settings();
+                if !self.settings.live {
+                    self.live = None;
+                }
+                self.live_too_large = false;
+            }
+            Command::SetWarn(p) => {
+                self.settings.warn_percent = p;
+                self.save_settings();
+                self.warn.low.clear();
+                if p > 0 {
+                    self.check_space(false);
+                }
+            }
+            Command::CheckSpace => {
+                self.warn.hidden.clear();
+                self.check_space(true);
+            }
             Command::SetLang(l) => {
                 i18n::set_lang(l);
                 self.settings.lang = Some(l);
@@ -845,6 +1155,44 @@ impl App {
             self.show_full_access = open;
             if let Some(e) = error {
                 self.show_error(e);
+            }
+        }
+        if self.hist.confirm_clear {
+            let mut open = true;
+            let mut decided = None;
+            egui::Window::new(t.btn_clear_history)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .default_pos(center)
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(false)
+                .default_width(400.0)
+                .show(ctx, |ui| {
+                    ui.label(t.clear_history_question);
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        if ui.button(t.btn_delete).clicked() {
+                            decided = Some(true);
+                        }
+                        if ui.button(t.cancel).clicked() {
+                            decided = Some(false);
+                        }
+                    });
+                });
+            if !open || decided.is_some() {
+                self.hist.confirm_clear = false;
+            }
+            if decided == Some(true)
+                && let Some(store) = &self.history_store
+            {
+                match store.clear() {
+                    Ok(()) => {
+                        self.hist.reset();
+                        self.hist.auto_done = true;
+                        self.notice = Some((t.clear_history_done.to_string(), Instant::now()));
+                    }
+                    Err(e) => self.show_error(format::io_error(&e)),
+                }
             }
         }
     }
@@ -935,6 +1283,28 @@ impl App {
                 if tree.cancelled {
                     ui.colored_label(ui.visuals().warn_fg_color, t.cancelled);
                 }
+                if let Some(live) = &self.live {
+                    use crate::live::Status;
+                    if live.lost {
+                        ui.colored_label(ui.visuals().warn_fg_color, t.live_lost);
+                    } else {
+                        match &live.status {
+                            Status::Watching => {
+                                let green = egui::Color32::from_rgb(34, 197, 94);
+                                ui.label(egui::RichText::new(format!("● {}", t.live_on)).color(green))
+                                    .on_hover_text(t.tip_live);
+                            }
+                            Status::Starting => {
+                                ui.label(egui::RichText::new(t.live_starting).weak());
+                            }
+                            Status::Failed(e) => {
+                                ui.label(egui::RichText::new(t.live_failed).weak()).on_hover_text(e.as_str());
+                            }
+                        }
+                    }
+                } else if self.live_too_large {
+                    ui.label(egui::RichText::new(t.live_too_large).weak());
+                }
             } else {
                 ui.label(t.welcome);
             }
@@ -961,6 +1331,7 @@ impl App {
                 (View::Age, t.view_age),
                 (View::Search, t.view_search),
                 (View::Cleanup, t.view_cleanup),
+                (View::History, t.view_history),
             ] {
                 ui.selectable_value(&mut self.view, view, label);
             }
@@ -1008,6 +1379,31 @@ impl App {
             }
             // Suggestions always cover the whole scan.
             View::Cleanup => cleanup::list(ui, tree, ROOT, generation, &mut self.cleanup),
+            View::History => {
+                // At first the newest earlier scan is compared.
+                if !self.hist.auto_done {
+                    self.hist.auto_done = true;
+                    let earlier = self.hist.entries.iter().rposition(|e| Some(e.time) != self.scan_time);
+                    if let (Some(store), Some(i)) = (&self.history_store, earlier) {
+                        match history_view::compare(store, tree, &self.hist.entries[i]) {
+                            Ok(c) => self.hist.compared = Some(c),
+                            Err(e) => log::warn!("history not read: {}", format::io_error(&e)),
+                        }
+                    }
+                }
+                let (acts, request) = history_view::show(
+                    ui,
+                    tree,
+                    self.scan_time,
+                    &self.hist,
+                    self.history_store.is_some(),
+                    self.settings.history,
+                );
+                if let Some(history_view::Request::Compare(i)) = request {
+                    self.hist.pending_compare = Some(i);
+                }
+                acts
+            }
             View::Search => {
                 ui.label(
                     egui::RichText::new(format!("{} {}", t.in_folder, tree.path(start).display())).weak(),
@@ -1119,12 +1515,17 @@ impl App {
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         self.poll_scan(&ctx);
+        self.live_poll(&ctx);
+        self.warn_poll(&ctx);
         self.update_title(&ctx);
         let mut actions = self.keyboard(&ctx);
         let mut cmds = self.global_keys(&ctx);
 
         cmds.extend(Panel::top("ribbon").show(ui, |ui| self.ribbon(ui)).inner);
         cmds.extend(Panel::top("address").show(ui, |ui| self.address_bar(ui)).inner);
+        if self.warn.low.iter().any(|l| !self.warn.hidden.contains(&l.path)) {
+            cmds.extend(Panel::top("warning").show(ui, |ui| self.warning_bar(ui)).inner);
+        }
         Panel::bottom("status").show(ui, |ui| self.status(ui));
         if self.tree.is_some() {
             let width = ui.available_width() * 0.5;
@@ -1142,6 +1543,9 @@ impl App {
                 paint::welcome(ui, self.running.is_some());
             }
         });
+        if let Some(i) = self.hist.pending_compare.take() {
+            self.compare_with(i);
+        }
         self.dialogs(&ctx);
         self.cleanup.poll(&ctx);
         let mut trash_now = None;

@@ -46,3 +46,16 @@
   question is shown before anything is sent; it contains only the folder
   name, its size and the kind of system.
 - Settings file; "Fully offline" switch; keys kept in the system key store.
+- History: after each scan a short summary (names and sizes of the larger
+  folders and files, no contents) is kept on this computer; up to 100 per
+  folder, can be switched off and deleted.
+- Comparison with an earlier scan that names the exact place where the
+  space went ("Since 19.11., Downloads/urlaub.zip has grown by 600 MB"),
+  a chart of the size over time and a forecast ("At this pace the disk
+  will be full in about 2 months").
+- Low space warning for the fixed disks (off, below 5, 10, 15 or 20 % free),
+  checked in the background every ten minutes, with "Scan" and "Hide".
+- Live update: after a scan the folder is watched and the numbers follow
+  new, changed and deleted files without a new scan (read-only; on Linux
+  up to 100,000 subfolders).
+- New "History" tab in the menu band; date and time in local time.

@@ -92,6 +92,53 @@ pub fn iso_date(secs: i64) -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
+/// Date and time in local time: "24.11.2026 14:05" or "2026-11-24 14:05".
+pub fn date_time(secs: i64) -> String {
+    if secs == NO_TIME {
+        return String::new();
+    }
+    let local = secs + local_offset(secs);
+    let min = local.rem_euclid(86_400) / 60;
+    format!("{} {:02}:{:02}", date(local), min / 60, min % 60)
+}
+
+/// Seconds between local time and UTC at the given moment (summer time included).
+fn local_offset(secs: i64) -> i64 {
+    #[cfg(unix)]
+    {
+        let t = secs as libc::time_t;
+        // SAFETY: localtime_r only writes into the given struct.
+        let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+        if unsafe { libc::localtime_r(&t, &mut tm) }.is_null() {
+            return 0;
+        }
+        tm.tm_gmtoff as i64
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::{FILETIME, SYSTEMTIME};
+        use windows_sys::Win32::System::Time::{
+            FileTimeToSystemTime, SystemTimeToFileTime, SystemTimeToTzSpecificLocalTime,
+        };
+        let ticks = (secs + 11_644_473_600) as u64 * 10_000_000;
+        let ft = FILETIME { dwLowDateTime: ticks as u32, dwHighDateTime: (ticks >> 32) as u32 };
+        // SAFETY: plain conversions between structs on the stack; a null time zone means the current one.
+        unsafe {
+            let mut utc: SYSTEMTIME = std::mem::zeroed();
+            let mut local: SYSTEMTIME = std::mem::zeroed();
+            let mut back: FILETIME = std::mem::zeroed();
+            if FileTimeToSystemTime(&ft, &mut utc) == 0
+                || SystemTimeToTzSpecificLocalTime(std::ptr::null(), &utc, &mut local) == 0
+                || SystemTimeToFileTime(&local, &mut back) == 0
+            {
+                return 0;
+            }
+            let local_ticks = (u64::from(back.dwHighDateTime) << 32) | u64::from(back.dwLowDateTime);
+            (local_ticks as i64 - ticks as i64) / 10_000_000
+        }
+    }
+}
+
 /// Days since 1970-01-01 to (year, month, day); H. Hinnant's algorithm.
 fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;

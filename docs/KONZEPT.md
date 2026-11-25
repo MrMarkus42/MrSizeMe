@@ -91,6 +91,24 @@ Umschaltbar nach Größe, belegtem Platz oder Anzahl Dateien.
 * **Prognose:** „Bei diesem Tempo ist C: in etwa 4 Monaten voll“.
 * **Warnung bei fast voller Platte** (optional, z. B. unter 10 % frei).
 
+Umsetzung (Etappe 6):
+
+* Nach jedem fertigen Scan wird eine verkleinerte Kopie des Baums gespeichert:
+  Einträge ab 1 MiB (bei sehr großen Scans mehr), höchstens 8 Ebenen und
+  30.000 Einträge, dazu Gesamtgrößen und freier Platz der Platte. Ablage im
+  Einstellungsordner unter `history/`, je Ordner höchstens 100 Scans; ein
+  neuer Scan innerhalb von 10 Minuten ersetzt den letzten.
+* Der Vergleich nennt die Stelle, die die Änderung wirklich erklärt: Ein
+  Ordner wird weggelassen, wenn ein einzelner Eintrag darin 90 % seiner
+  Änderung ausmacht.
+* Prognose: Gerade durch die Messpunkte (kleinste Quadrate), erst ab Scans an
+  zwei verschiedenen Tagen.
+* Warnung: nur feste Laufwerke, Prüfung im Hintergrund alle 10 Minuten.
+* Live-Aktualisierung: Paket `notify`; bei jeder Meldung wird nur der
+  betroffene Ordner neu gelesen, neue Unterordner werden einzeln gescannt.
+  Unter Linux braucht jeder Ordner eine eigene Beobachtung, deshalb dort nur
+  bis 100.000 Unterordner.
+
 ## 5. Oberfläche
 
 * Modernes Aussehen, hell und dunkel, eigene einheitliche Symbole.
@@ -128,7 +146,7 @@ sind mit minisign signiert; der öffentliche Schlüssel ist eingebaut.
 | 3 | Weitere Ansichten: Ring, Kategorien, Größte/Älteste, Alter, Filter | fertig (24.11.) |
 | 4 | Admin-Modus (Windows, macOS, Linux), MFT-Schnell-Scan, Menüband | fertig (24.11.); auf echtem Windows/Mac noch vom Nutzer zu testen |
 | 5 | Aufräumhilfe: Wissensliste, Papierkorb, Vorschläge, KI | fertig (24.11.); KI-Anbieter mit echten Schlüsseln noch vom Nutzer zu testen |
-| 6 | Verlauf, Vergleich, Prognose, Warnung, Live-Aktualisierung | offen |
+| 6 | Verlauf, Vergleich, Prognose, Warnung, Live-Aktualisierung | fertig (25.11.); Live-Aktualisierung auf echtem Windows/Mac noch vom Nutzer zu testen |
 | 7 | Duplikate, Programme-Ansicht, Cloud-Dateien, Verschieben | offen |
 | 8 | Export, Kommandozeile, Kontextmenü im Explorer/Finder | offen |
 | 9 | Updates, Installer, portable Version, .dmg, Website | offen |
