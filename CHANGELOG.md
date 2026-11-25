@@ -1,6 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [1.1.0] - 2026-11-25
+
+### Security
+- RUSTSEC-2026-0592 (url) and RUSTSEC-2026-0594 (cookie) still do not affect
+  this release: neither crate is built into any of the programs. The fixed
+  versions follow once they are 14 days old (from 4 and 7 December).
 
 ### Fixed
 - Cloud files that are only online (OneDrive, iCloud) are no longer counted
