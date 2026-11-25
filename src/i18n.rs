@@ -384,6 +384,20 @@ pub struct Texts {
     pub move_p_links: &'static str,
     pub move_p_network: &'static str,
     pub move_p_same_disk: &'static str,
+
+    // Exports and the right-click menu.
+    pub report_created: &'static str,
+    pub btn_xlsx: &'static str,
+    pub btn_html: &'static str,
+    pub grp_system: &'static str,
+    pub btn_context_menu: &'static str,
+    pub tip_context_menu: &'static str,
+    pub shell_add_question: &'static str,
+    pub shell_remove_question: &'static str,
+    pub shell_added: &'static str,
+    pub shell_removed: &'static str,
+    pub btn_add: &'static str,
+    pub btn_remove: &'static str,
 }
 
 pub static DE: Texts = Texts {
@@ -712,6 +726,19 @@ pub static DE: Texts = Texts {
     move_p_links: "Der Ordner enthält Verknüpfungen; die lassen sich unter Windows nicht sicher kopieren.",
     move_p_network: "Eine Verknüpfung auf ein Netzlaufwerk ist nicht möglich.",
     move_p_same_disk: "Hinweis: Das Ziel liegt auf derselben Platte – dadurch wird kein Platz frei.",
+
+    report_created: "Erstellt",
+    btn_xlsx: "Excel-Datei",
+    btn_html: "HTML-Bericht",
+    grp_system: "System",
+    btn_context_menu: "Im Rechtsklick-Menü",
+    tip_context_menu: "Fügt dem Rechtsklick-Menü für Ordner den Eintrag „Mit MrSizeMe anzeigen“ hinzu – nur für Ihr Benutzerkonto, jederzeit wieder entfernbar.",
+    shell_add_question: "„Mit MrSizeMe anzeigen“ zum Rechtsklick-Menü für Ordner hinzufügen?\n\nDabei wird nur für Ihr Benutzerkonto ein Eintrag angelegt: unter Windows in der Registry (HKEY_CURRENT_USER), auf dem Mac als Schnellaktion in ~/Library/Services, unter Linux als Skript für Nautilus und Dolphin. Hier lässt er sich jederzeit wieder entfernen.",
+    shell_remove_question: "Den Eintrag „Mit MrSizeMe anzeigen“ wieder aus dem Rechtsklick-Menü entfernen?",
+    shell_added: "Eintrag im Rechtsklick-Menü angelegt",
+    shell_removed: "Eintrag aus dem Rechtsklick-Menü entfernt",
+    btn_add: "Hinzufügen",
+    btn_remove: "Entfernen",
 };
 
 pub static EN: Texts = Texts {
@@ -1040,6 +1067,19 @@ pub static EN: Texts = Texts {
     move_p_links: "The folder contains links; on Windows they cannot be copied safely.",
     move_p_network: "A link to a network drive is not possible.",
     move_p_same_disk: "Note: the target is on the same disk – no space becomes free.",
+
+    report_created: "Created",
+    btn_xlsx: "Excel file",
+    btn_html: "HTML report",
+    grp_system: "System",
+    btn_context_menu: "In right-click menu",
+    tip_context_menu: "Adds “Show with MrSizeMe” to the right-click menu of folders – only for your user account, removable at any time.",
+    shell_add_question: "Add “Show with MrSizeMe” to the right-click menu of folders?\n\nOnly for your user account an entry is created: on Windows in the registry (HKEY_CURRENT_USER), on the Mac as a Quick Action in ~/Library/Services, on Linux as a script for Nautilus and Dolphin. It can be removed here at any time.",
+    shell_remove_question: "Remove “Show with MrSizeMe” from the right-click menu again?",
+    shell_added: "Entry added to the right-click menu",
+    shell_removed: "Entry removed from the right-click menu",
+    btn_add: "Add",
+    btn_remove: "Remove",
 };
 
 #[cfg(test)]

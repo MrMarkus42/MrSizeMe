@@ -2021,6 +2021,7 @@ dependencies = [
 name = "mrsizeme"
 version = "0.1.0"
 dependencies = [
+ "crc32fast",
  "eframe",
  "egui",
  "egui_extras",

@@ -426,3 +426,22 @@ fn move_assistant_moves_and_links() {
     assert!(h.query_by_label("Fehler").is_none());
     std::fs::remove_dir_all(&base).unwrap();
 }
+
+#[test]
+fn context_menu_entry_asks_first() {
+    let _guard = lock();
+    let t = sample();
+    let mut h = harness(&t);
+    // The button says "add" or "remove", depending on the system; both ask first.
+    h.get_by_label("Im Rechtsklick-Menü").click();
+    h.run();
+    let add = h.query_all_by_label_contains("hinzufügen?").next().is_some();
+    let remove = h.query_all_by_label_contains("entfernen?").next().is_some();
+    assert!(add || remove);
+    let button = if add { "Hinzufügen" } else { "Entfernen" };
+    h.get_by_label(button).click();
+    h.run();
+    // Blocked in tests: nothing changed, no error.
+    assert!(h.query_by_label("Fehler").is_none());
+    assert!(h.query_all_by_label_contains("hinzufügen?").next().is_none());
+}

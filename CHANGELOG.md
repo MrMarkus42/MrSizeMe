@@ -71,3 +71,12 @@
   file, only then removes the original (recycle bin or delete) and can put
   a link at the old place (junction on Windows, symbolic link elsewhere).
 - Cloud files that are only online are marked during the scan.
+- Export as Excel workbook (.xlsx, written without extra libraries; names
+  are always text, never formulas) and as a self-contained HTML report
+  (no scripts; overview, categories, types, largest files, clean-up hints).
+- Command line: `--scan FOLDER` with `--format text|json|csv|html|xlsx`,
+  `--out`, `--depth`, `--files`, `--top`; `--help`. On Windows the output
+  appears in the console the program was started from.
+- "Show with MrSizeMe" in the right-click menu of folders, only on request
+  and removable: Windows (registry below HKEY_CURRENT_USER), macOS (Quick
+  Action), Linux (Nautilus script, Dolphin service menu).

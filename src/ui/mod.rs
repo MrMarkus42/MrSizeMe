@@ -100,6 +100,10 @@ pub(crate) enum Command {
     AdminScan,
     FullDiskAccess,
     ExportCsv,
+    ExportXlsx,
+    ExportHtml,
+    /// Ask whether to add (true) or remove the right-click menu entry.
+    AskShell(bool),
     ExpandAll,
     CollapseAll,
     LogFolder,
@@ -199,6 +203,10 @@ pub struct App {
     mover: tools::Move,
     /// Waiting for the answer to "keep only online".
     free_up_ask: Option<tools::FreeUpRequest>,
+    /// Waiting for the answer to adding (true) or removing the right-click menu entry.
+    shell_ask: Option<bool>,
+    /// The right-click menu entry is there (checked when first shown).
+    shell_installed: Option<bool>,
 }
 
 /// The check for nearly full disks.
@@ -215,6 +223,14 @@ struct Warn {
 
 /// Disks are checked again after this time.
 const WARN_EVERY: Duration = Duration::from_secs(10 * 60);
+
+/// The formats of the export buttons.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExportKind {
+    Csv,
+    Xlsx,
+    Html,
+}
 
 /// True if no folder above the node (or the node itself) was taken out.
 fn reachable(tree: &Tree, id: NodeId) -> bool {
@@ -332,6 +348,8 @@ impl App {
             apps_cache: None,
             mover: tools::Move::default(),
             free_up_ask: None,
+            shell_ask: None,
+            shell_installed: None,
         }
     }
 
@@ -690,16 +708,25 @@ impl App {
         self.cleanup.info = None;
     }
 
-    fn export_csv(&mut self) {
+    fn export(&mut self, kind: ExportKind) {
         let Some(tree) = &self.tree else { return };
-        let Some(path) =
-            rfd::FileDialog::new().set_file_name("mrsizeme.csv").add_filter("CSV", &["csv"]).save_file()
+        let (name, filter, ext) = match kind {
+            ExportKind::Csv => ("mrsizeme.csv", "CSV", "csv"),
+            ExportKind::Xlsx => ("mrsizeme.xlsx", "Excel", "xlsx"),
+            ExportKind::Html => ("mrsizeme.html", "HTML", "html"),
+        };
+        let Some(path) = rfd::FileDialog::new().set_file_name(name).add_filter(filter, &[ext]).save_file()
         else {
             return;
         };
+        let when = self.scan_time.unwrap_or_else(crate::query::now);
         let result = std::fs::File::create(&path).and_then(|f| {
             let mut w = io::BufWriter::new(f);
-            export::csv(tree, ROOT, usize::MAX, false, &mut w)
+            match kind {
+                ExportKind::Csv => export::csv(tree, ROOT, usize::MAX, false, &mut w),
+                ExportKind::Xlsx => crate::report::xlsx(tree, ROOT, usize::MAX, false, &mut w),
+                ExportKind::Html => crate::report::html(tree, when, &mut w),
+            }
         });
         match result {
             Ok(()) => self.notice = Some((tr().export_done.to_string(), Instant::now())),
@@ -800,6 +827,21 @@ impl App {
                     group(ui, t.grp_export, |ui| {
                         if big(ui, Icon::Export, t.btn_csv, has_tree && !busy, false).clicked() {
                             cmds.push(Command::ExportCsv);
+                        }
+                        if big(ui, Icon::Sheet, t.btn_xlsx, has_tree && !busy, false).clicked() {
+                            cmds.push(Command::ExportXlsx);
+                        }
+                        if big(ui, Icon::Report, t.btn_html, has_tree && !busy, false).clicked() {
+                            cmds.push(Command::ExportHtml);
+                        }
+                    });
+                    group(ui, t.grp_system, |ui| {
+                        let on = *self.shell_installed.get_or_insert_with(crate::shell::is_installed);
+                        if big(ui, Icon::Menu, t.btn_context_menu, true, on)
+                            .on_hover_text(t.tip_context_menu)
+                            .clicked()
+                        {
+                            cmds.push(Command::AskShell(!on));
                         }
                     });
                 }
@@ -1096,7 +1138,10 @@ impl App {
                 }
             }
             Command::FullDiskAccess => self.show_full_access = true,
-            Command::ExportCsv => self.export_csv(),
+            Command::ExportCsv => self.export(ExportKind::Csv),
+            Command::ExportXlsx => self.export(ExportKind::Xlsx),
+            Command::ExportHtml => self.export(ExportKind::Html),
+            Command::AskShell(add) => self.shell_ask = Some(add),
             Command::ExpandAll => {
                 if let Some(tree) = &self.tree {
                     let start = self.selected.unwrap_or(ROOT);
@@ -1234,6 +1279,44 @@ impl App {
             self.show_full_access = open;
             if let Some(e) = error {
                 self.show_error(e);
+            }
+        }
+        if let Some(add) = self.shell_ask {
+            let mut open = true;
+            let mut decided = None;
+            egui::Window::new(t.btn_context_menu)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .default_pos(center)
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(false)
+                .default_width(440.0)
+                .show(ctx, |ui| {
+                    ui.label(if add { t.shell_add_question } else { t.shell_remove_question });
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        if ui.button(if add { t.btn_add } else { t.btn_remove }).clicked() {
+                            decided = Some(true);
+                        }
+                        if ui.button(t.cancel).clicked() {
+                            decided = Some(false);
+                        }
+                    });
+                });
+            if !open || decided.is_some() {
+                self.shell_ask = None;
+            }
+            if decided == Some(true) {
+                let result = if add { crate::shell::install() } else { crate::shell::uninstall() };
+                match result {
+                    Ok(external::Outcome::Done) => {
+                        self.shell_installed = Some(add);
+                        let text = if add { t.shell_added } else { t.shell_removed };
+                        self.notice = Some((text.to_string(), Instant::now()));
+                    }
+                    Ok(external::Outcome::Blocked) => {}
+                    Err(e) => self.show_error(format::io_error(&e)),
+                }
             }
         }
         if let Some((path, name, size)) = self.free_up_ask.clone() {

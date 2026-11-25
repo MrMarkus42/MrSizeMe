@@ -1,15 +1,13 @@
-//! Start of the program: the window, or with `--scan PATH` a short
-//! summary on the command line.
+//! Start of the program: the window, or with `--scan PATH` the command line
+//! mode (see `--help`).
 
 // No console window behind the program on Windows (release builds).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use mrsizeme::i18n::{self, Lang};
+use mrsizeme::{applog, cli};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::time::Instant;
-
-use mrsizeme::i18n::{self, Lang};
-use mrsizeme::{applog, format, scan, tree};
 
 fn main() -> ExitCode {
     i18n::set_lang(Lang::from_system());
@@ -24,9 +22,19 @@ fn main() -> ExitCode {
         let code = mrsizeme::elevate::run_helper(Path::new(root), Path::new(out));
         return ExitCode::from(u8::try_from(code).unwrap_or(1));
     }
-    if args.first().is_some_and(|a| a == "--scan") {
-        let root = args.get(1).map_or_else(|| PathBuf::from("."), PathBuf::from);
-        return cli_scan(root);
+    if args.first().is_some_and(|a| a == "--scan" || a == "--help" || a == "-h") {
+        attach_console();
+        return match cli::Args::parse(&args) {
+            Ok(cli::Command::Help) => {
+                println!("{}", cli::HELP);
+                ExitCode::SUCCESS
+            }
+            Ok(cli::Command::Scan(a)) => cli::run(&a),
+            Err(e) => {
+                eprintln!("{e}\n\n{}", cli::HELP);
+                ExitCode::from(2)
+            }
+        };
     }
 
     applog::init();
@@ -53,30 +61,13 @@ fn main() -> ExitCode {
     }
 }
 
-fn cli_scan(root: PathBuf) -> ExitCode {
-    let progress = scan::Progress::default();
-    let started = Instant::now();
-    let tree = match scan::scan(&root, &scan::Options::default(), &progress) {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("{}: {}", root.display(), format::io_error(&e));
-            return ExitCode::FAILURE;
-        }
-    };
-    let r = tree.root();
-    println!(
-        "{}: {} ({}), {} / {} / {} / {:.2} s",
-        tree.root_path.display(),
-        format::size(r.size),
-        format::size(r.allocated),
-        format::count(r.files),
-        format::count(r.dirs),
-        tree.errors.len(),
-        started.elapsed().as_secs_f64()
-    );
-    for &c in tree.children(tree::ROOT).iter().take(20) {
-        let n = tree.node(c);
-        println!("{:>12}  {:>7}  {}", format::size(n.size), format::percent(n.size, r.size), n.name_lossy());
+/// Windows: a program without a console window prints into the console it
+/// was started from.
+fn attach_console() {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+        // SAFETY: plain call; fails harmlessly if there is no console.
+        unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
     }
-    ExitCode::SUCCESS
 }

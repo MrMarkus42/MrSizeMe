@@ -29,6 +29,8 @@ up safely. It runs on Windows, macOS and Linux and speaks German and English.
 * History of earlier scans with comparison, size chart and forecast when
   the disk will be full; warning when a disk is nearly full.
 * Live update: the numbers follow changes on the disk without a new scan.
+* Export as CSV, Excel workbook and HTML report; command line with JSON.
+* "Show with MrSizeMe" in the right-click menu of folders (on request).
 * Duplicate files, cloud folders with "keep only online", space per
   program, and a move assistant for large folders.
 * German and English, light and dark mode.
@@ -39,8 +41,16 @@ up safely. It runs on Windows, macOS and Linux and speaks German and English.
 cargo build --release --locked
 ```
 
-Start with a folder: `mrsizeme /path/to/folder`. Summary on the command line:
-`mrsizeme --scan /path/to/folder`.
+Start with a folder: `mrsizeme /path/to/folder`. On the command line:
+
+```
+mrsizeme --scan /path/to/folder                       # largest folders
+mrsizeme --scan /path --format json --depth 2         # JSON tree
+mrsizeme --scan /path --format xlsx --out report.xlsx # Excel workbook
+mrsizeme --scan /path --format html --out report.html # HTML report
+```
+
+`mrsizeme --help` lists all options.
 
 ## Privacy and safety
 

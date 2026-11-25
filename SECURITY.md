@@ -47,6 +47,12 @@ public issue. You will get an answer within a few days.
 * **Moving is checked.** The move assistant copies first, checks every
   copied file and only then removes the original; on any problem the copy
   is removed and the original stays. Protected and cloud folders are refused.
+* **System changes only on request.** The right-click menu entry is added
+  only after a question, only for the current user, and can be removed in
+  the program again.
+* **Safe reports.** The HTML report contains no scripts and loads nothing
+  from outside; all names are escaped. In the Excel export names are always
+  plain text.
 * **Watching only reads.** The live update and the disk warning only read
   names, sizes and free space; they never change anything on the disk.
 * **Tests stay inside.** One central switch blocks every outside action
