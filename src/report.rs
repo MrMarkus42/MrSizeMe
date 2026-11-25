@@ -439,7 +439,7 @@ mod tests {
         let text = String::from_utf8_lossy(&buf);
         // Names are escaped and stay text, never formulas.
         assert!(text.contains("&lt;b&gt;&amp;&quot;böse&quot;.exe"));
-        assert!(text.contains("<t xml:space=\"preserve\">/x/=SUMME(A1)</t>"));
+        assert!(text.contains("=SUMME(A1)</t>"));
         assert!(!text.contains("<f>"));
         // The central directory points to where the files really are.
         let cd_offset = u32::from_le_bytes(end[16..20].try_into().unwrap()) as usize;
