@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>de</string>
+	<key>CFBundleDisplayName</key><string>MrSizeMe</string>
+	<key>CFBundleExecutable</key><string>mrsizeme</string>
+	<key>CFBundleIconFile</key><string>mrsizeme.icns</string>
+	<key>CFBundleIdentifier</key><string>io.github.mrmarkus42.mrsizeme</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleName</key><string>MrSizeMe</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>@VERSION@</string>
+	<key>CFBundleVersion</key><string>@VERSION@</string>
+	<key>CFBundleLocalizations</key><array><string>de</string><string>en</string></array>
+	<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
+	<key>LSMinimumSystemVersion</key><string>11.0</string>
+	<key>NSHighResolutionCapable</key><true/>
+	<key>NSHumanReadableCopyright</key><string>Mr. M – MIT or Apache-2.0</string>
+</dict>
+</plist>

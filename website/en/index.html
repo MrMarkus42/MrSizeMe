@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'">
+<title>MrSizeMe – Where did the disk space go?</title>
+<meta name="description" content="MrSizeMe shows which folders and files use the space on your disks – with clean-up help, history and forecast. For Windows, macOS and Linux.">
+<link rel="icon" href="../img/icon.png">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><div class="wrap">
+  <img src="../img/icon.png" alt="">
+  <strong>MrSizeMe</strong>
+  <nav><a href="#features">Features</a><a href="#download">Download</a><a href="../">Deutsch</a></nav>
+</div></header>
+
+<main class="wrap">
+<section class="hero">
+  <h1>Where did the disk space go?</h1>
+  <p>MrSizeMe shows in seconds which folders and files fill your storage – and helps you clean up safely. For Windows, macOS and Linux, free and open source.</p>
+  <a class="button" href="https://github.com/MrMarkus42/MrSizeMe/releases/latest">Download for free</a>
+  <p class="small">Windows (installer or portable) · macOS (.dmg) · Linux</p>
+  <img class="shot" src="../img/main-window-light-en.png" alt="The MrSizeMe main window with ring chart and categories" width="1400" height="820">
+</section>
+
+<h2 id="features">Features</h2>
+<div class="grid">
+  <div class="card"><h3>Fast scan, every folder</h3><p>Several threads; on Windows optionally with admin rights straight from the NTFS table. The window itself never runs with raised rights.</p></div>
+  <div class="card"><h3>Many views</h3><p>Folder tree, tile map, ring chart, file types, categories, largest and oldest files, age distribution, search with filters.</p></div>
+  <div class="card"><h3>Clean-up help with traffic light</h3><p>About 40 well-known big folders (WinSxS, caches, iPhone backups, node_modules …) with the safe way to clean up. Recycle bin only, never deleted for good.</p></div>
+  <div class="card"><h3>Ask an AI – if you want</h3><p>Google AI mode, a local AI (Ollama), Gemini or Claude with your own key. You see exactly what is sent first: only the folder name and size.</p></div>
+  <div class="card"><h3>History and forecast</h3><p>“Since last week, Downloads has grown by 12 GB.” – “At this pace the disk will be full in about 2 months.” Plus a warning when space runs low.</p></div>
+  <div class="card"><h3>Live update</h3><p>After the scan, the numbers follow changes on the disk – without a new scan.</p></div>
+  <div class="card"><h3>Duplicates, cloud, programs</h3><p>Duplicate files by checksum, OneDrive/iCloud “keep only online”, space per program including its data and caches.</p></div>
+  <div class="card"><h3>Move assistant</h3><p>Large folders to another disk: copy and check first, then remove the original – with a link at the old place if you like.</p></div>
+  <div class="card"><h3>Export and command line</h3><p>CSV, Excel, HTML report and JSON. Plus “Show with MrSizeMe” in the right-click menu – only if you switch it on.</p></div>
+</div>
+
+<h2>Privacy and safety</h2>
+<ul>
+  <li>Only names, sizes and dates are read – file contents only by the duplicate search you start yourself, and only on your computer.</li>
+  <li>The program only goes online when you ask the AI or (with your permission) look for updates. “Fully offline” blocks all of it.</li>
+  <li>Updates are signed. A file with a wrong signature is not installed.</li>
+  <li>Nothing is deleted for good without a question; system and user folders are protected.</li>
+</ul>
+
+<h2 id="download">Download</h2>
+<table>
+  <tr><th>System</th><th>File</th></tr>
+  <tr><td>Windows 10/11</td><td>Installer <code>…-windows-x64-setup.exe</code> or portable <code>…-windows-x64-portable.zip</code></td></tr>
+  <tr><td>macOS 11 or newer</td><td><code>…-macos.dmg</code> (Apple silicon and Intel). First start: right-click MrSizeMe → “Open”.</td></tr>
+  <tr><td>Linux</td><td><code>…-linux-x86_64.tar.gz</code></td></tr>
+</table>
+<p><a class="button" href="https://github.com/MrMarkus42/MrSizeMe/releases/latest">Go to the newest version</a></p>
+<p class="small">Every file has a SHA-256 checksum (<code>SHA256SUMS.txt</code>) and a minisign signature (<code>.minisig</code>).</p>
+</main>
+
+<footer><div class="wrap">
+  MrSizeMe by Mr. M · MIT or Apache-2.0 licence · <a href="https://github.com/MrMarkus42/MrSizeMe">Source code</a> · <a href="https://github.com/MrMarkus42/MrSizeMe/blob/main/SECURITY.md">Security</a>
+</div></footer>
+</body>
+</html>

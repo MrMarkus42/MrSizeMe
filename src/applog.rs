@@ -18,6 +18,9 @@ static LOGGER: OnceLock<FileLogger> = OnceLock::new();
 
 /// Folder for the log file.
 pub fn log_dir() -> Option<PathBuf> {
+    if crate::settings::is_portable() {
+        return crate::settings::config_dir().map(|d| d.join("logs"));
+    }
     let home = home_dir();
     if cfg!(windows) {
         std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("MrSizeMe"))

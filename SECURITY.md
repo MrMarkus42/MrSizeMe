@@ -13,7 +13,8 @@ public issue. You will get an answer within a few days.
   yourself, to compare checksums on this computer; cloud files that are
   only online are never read.
 * **No hidden network access.** The program only goes online when you
-  click “Send question” or “Open in browser” in the AI part. The exact text
+  click “Send question” or “Open in browser” in the AI part, or to look for
+  updates if you allowed it (asked at the first start). The exact text
   is shown before; it contains at most a folder name with up to two folders
   above it, its size and the kind of system – never a full path, your user
   name or file contents. “Fully offline” blocks all of it.
@@ -25,6 +26,12 @@ public issue. You will get an answer within a few days.
   bin, after a question. System folders, the standard user folders and
   everything marked red in the knowledge list are refused. An AI answer
   never triggers any action.
+* **Signed updates.** Updates come only from the project's GitHub release
+  page. Each file is checked with the minisign public key built into the
+  program; a file without a valid signature is refused. The secret key
+  exists only on the maintainer's computer, protected by a password, never in
+  the repository, the CI or a cloud. Every download also has a SHA-256
+  checksum.
 * **Links are not followed**, so a scan cannot loop or leave the chosen folder
   through a link or junction.
 * **Safe export.** Names that start with `=`, `+`, `-` or `@` are written so

@@ -167,7 +167,7 @@ pub fn google_url(question: &str, ai_mode: bool) -> String {
     }
 }
 
-fn agent() -> ureq::Agent {
+pub(crate) fn agent() -> ureq::Agent {
     #[cfg(any(windows, target_os = "macos"))]
     let provider = ureq::tls::TlsProvider::NativeTls;
     #[cfg(not(any(windows, target_os = "macos")))]

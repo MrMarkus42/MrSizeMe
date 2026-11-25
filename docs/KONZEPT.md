@@ -149,7 +149,7 @@ sind mit minisign signiert; der öffentliche Schlüssel ist eingebaut.
 | 6 | Verlauf, Vergleich, Prognose, Warnung, Live-Aktualisierung | fertig (25.11.); Live-Aktualisierung auf echtem Windows/Mac noch vom Nutzer zu testen |
 | 7 | Duplikate, Programme-Ansicht, Cloud-Dateien, Verschieben | fertig (25.11.); „Nur online behalten“ und Verknüpfung (Windows) noch vom Nutzer zu testen |
 | 8 | Export, Kommandozeile, Kontextmenü im Explorer/Finder | fertig (25.11.); Kontextmenü auf echtem Windows/Mac noch vom Nutzer zu testen |
-| 9 | Updates, Installer, portable Version, .dmg, Website | offen |
+| 9 | Updates, Installer, portable Version, .dmg, Website | fertig (25.11.); Schlüssel anlegen, erster Release-Lauf und Tests auf echtem Windows/Mac durch den Nutzer offen |
 
 ## Arbeitsweise
 

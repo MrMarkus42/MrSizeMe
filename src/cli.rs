@@ -148,6 +148,31 @@ pub fn write(tree: &tree::Tree, a: &Args, secs: f64, out: &mut dyn Write) -> io:
     out.flush()
 }
 
+/// Checks a file and its .minisig signature with the key built into the program.
+pub fn verify_file(file: &std::path::Path, sig: &std::path::Path) -> ExitCode {
+    let Some(key) = crate::update::public_key() else {
+        eprintln!("this program has no update key");
+        return ExitCode::FAILURE;
+    };
+    let result = std::fs::read(file).and_then(|data| Ok((data, std::fs::read_to_string(sig)?)));
+    match result {
+        Ok((data, sig_text)) => match crate::update::verify(&data, &sig_text, &key) {
+            Ok(()) => {
+                println!("OK {}", file.display());
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("BAD {}: {e}", file.display());
+                ExitCode::FAILURE
+            }
+        },
+        Err(e) => {
+            eprintln!("{}: {}", file.display(), format::io_error(&e));
+            ExitCode::FAILURE
+        }
+    }
+}
+
 pub fn run(a: &Args) -> ExitCode {
     let started = std::time::Instant::now();
     let mut tree = match scan::scan(&a.root, &scan::Options::default(), &scan::Progress::default()) {

@@ -34,6 +34,14 @@ up safely. It runs on Windows, macOS and Linux and speaks German and English.
 * Duplicate files, cloud folders with "keep only online", space per
   program, and a move assistant for large folders.
 * German and English, light and dark mode.
+* Optional, signed updates (the program asks first).
+
+## Download
+
+The newest version is on the [release page](https://github.com/MrMarkus42/MrSizeMe/releases/latest):
+Windows installer or portable ZIP, macOS disk image, Linux archive. Every file
+has a SHA-256 checksum and a minisign signature; the program checks the
+signature of every update itself.
 
 ## Building
 

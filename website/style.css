@@ -1,0 +1,61 @@
+:root {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --text: #1e293b;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --accent: #0f766e;
+  --accent-bg: #ccfbf1;
+  --button: #0f766e;
+  --button-text: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --line: #334155;
+    --accent: #5eead4;
+    --accent-bg: #134e4a;
+    --button: #14b8a6;
+    --button-text: #042f2e;
+  }
+}
+* { box-sizing: border-box; }
+img { max-width: 100%; height: auto; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.55;
+}
+a { color: var(--accent); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+header { padding: 20px 0; border-bottom: 1px solid var(--line); }
+header .wrap { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+header img { width: 40px; height: 40px; }
+header strong { font-size: 1.3rem; }
+header nav { margin-left: auto; display: flex; gap: 16px; }
+.hero { padding: 48px 0 24px; text-align: center; }
+.hero h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); margin: 0 0 12px; }
+.hero p { font-size: 1.15rem; color: var(--muted); max-width: 720px; margin: 0 auto 24px; }
+.button {
+  display: inline-block; padding: 12px 22px; border-radius: 10px;
+  background: var(--button); color: var(--button-text); text-decoration: none; font-weight: 600;
+}
+.small { font-size: 0.9rem; color: var(--muted); }
+.shot { margin: 32px auto; max-width: 100%; border: 1px solid var(--line); border-radius: 12px; display: block; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 24px 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.card p { margin: 0; color: var(--muted); }
+h2 { margin-top: 48px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.gallery img { width: 100%; border: 1px solid var(--line); border-radius: 10px; }
+.gallery figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; }
+td, th { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+code { background: var(--accent-bg); padding: 1px 5px; border-radius: 4px; }
+footer { margin-top: 64px; padding: 24px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }

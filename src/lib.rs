@@ -32,3 +32,4 @@ pub mod trash;
 pub mod tree;
 pub mod treemap;
 pub mod ui;
+pub mod update;

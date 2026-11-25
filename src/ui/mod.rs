@@ -11,6 +11,7 @@ mod places;
 mod ribbon;
 mod ring;
 mod tools;
+mod updates;
 
 use std::collections::HashSet;
 use std::io;
@@ -104,6 +105,9 @@ pub(crate) enum Command {
     ExportHtml,
     /// Ask whether to add (true) or remove the right-click menu entry.
     AskShell(bool),
+    CheckUpdates,
+    /// Days between automatic update checks; `None` = never.
+    SetUpdateEvery(Option<u16>),
     ExpandAll,
     CollapseAll,
     LogFolder,
@@ -207,6 +211,9 @@ pub struct App {
     shell_ask: Option<bool>,
     /// The right-click menu entry is there (checked when first shown).
     shell_installed: Option<bool>,
+    upd: updates::State,
+    /// Show the update question although the window runs in test mode.
+    ask_updates: bool,
 }
 
 /// The check for nearly full disks.
@@ -246,6 +253,7 @@ impl App {
         app.persist = true;
         app.auto = true;
         app.history_store = crate::history::Store::default_location();
+        crate::update::clean_up();
         if let Some(l) = app.settings.lang {
             i18n::set_lang(l);
         }
@@ -278,6 +286,13 @@ impl App {
     #[doc(hidden)]
     pub fn with_low_disks(mut self, low: Vec<crate::disk::Low>) -> Self {
         self.warn.low = low;
+        self
+    }
+
+    /// Shows the update question of the first start (tests).
+    #[doc(hidden)]
+    pub fn with_update_question(mut self) -> Self {
+        self.ask_updates = true;
         self
     }
 
@@ -350,6 +365,8 @@ impl App {
             free_up_ask: None,
             shell_ask: None,
             shell_installed: None,
+            upd: updates::State::default(),
+            ask_updates: false,
         }
     }
 
@@ -429,6 +446,43 @@ impl App {
         self.tree = Some(tidy);
         self.generation += 1;
         self.cleanup.reset();
+    }
+
+    /// The first question, the automatic check and the update windows.
+    fn updates_poll(&mut self, ctx: &egui::Context) {
+        if self.auto || self.ask_updates {
+            match self.settings.updates {
+                None => {
+                    if let Some(yes) = updates::ask_window(ctx) {
+                        self.settings.updates = Some(yes);
+                        self.settings.update_every_days = 7;
+                        self.save_settings();
+                    }
+                }
+                Some(true) => {
+                    let now = crate::query::now();
+                    let due = now - self.settings.update_last
+                        >= i64::from(self.settings.update_every_days) * 86_400;
+                    if due && self.auto && !self.settings.offline && !self.upd.busy() {
+                        self.settings.update_last = now;
+                        self.save_settings();
+                        self.upd.start_check(&self.settings, false);
+                    }
+                }
+                Some(false) => {}
+            }
+        }
+        self.upd.poll(ctx);
+        updates::found_window(ctx, &mut self.upd, &self.settings);
+        if let Some(n) = self.upd.notice.take() {
+            self.notice = Some((n, Instant::now()));
+        }
+        if let Some(e) = self.upd.error.take() {
+            self.show_error(e);
+        }
+        if self.upd.quit {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
     }
 
     /// Checks the disks for free space now and then (in the background).
@@ -1065,6 +1119,30 @@ impl App {
                             cmds.push(Command::LogFolder);
                         }
                     });
+                    group(ui, t.grp_updates, |ui| {
+                        if big(ui, Icon::Update, t.btn_check_updates, !self.upd.busy(), false).clicked() {
+                            cmds.push(Command::CheckUpdates);
+                        }
+                        let auto = self.settings.updates == Some(true);
+                        let resp = big(ui, Icon::Gear, t.updates_auto, true, auto);
+                        egui::Popup::menu(&resp).show(|ui| {
+                            let every = self.settings.update_every_days;
+                            for (value, label) in [
+                                (None, t.updates_off),
+                                (Some(1), t.updates_daily),
+                                (Some(7), t.updates_weekly),
+                                (Some(30), t.updates_monthly),
+                            ] {
+                                let on = match value {
+                                    None => !auto,
+                                    Some(d) => auto && every == d,
+                                };
+                                if ui.selectable_label(on, label).clicked() {
+                                    cmds.push(Command::SetUpdateEvery(value));
+                                }
+                            }
+                        });
+                    });
                 }
             });
         });
@@ -1142,6 +1220,14 @@ impl App {
             Command::ExportXlsx => self.export(ExportKind::Xlsx),
             Command::ExportHtml => self.export(ExportKind::Html),
             Command::AskShell(add) => self.shell_ask = Some(add),
+            Command::CheckUpdates => self.upd.start_check(&self.settings, true),
+            Command::SetUpdateEvery(days) => {
+                self.settings.updates = Some(days.is_some());
+                if let Some(d) = days {
+                    self.settings.update_every_days = d;
+                }
+                self.save_settings();
+            }
             Command::ExpandAll => {
                 if let Some(tree) = &self.tree {
                     let start = self.selected.unwrap_or(ROOT);
@@ -1770,6 +1856,7 @@ impl App {
             self.compare_with(i);
         }
         self.dups.poll(&ctx);
+        self.updates_poll(&ctx);
         match tools::move_window(&ctx, &mut self.mover) {
             Some(tools::MoveEvent::Moved(id)) => self.take_out(id),
             Some(tools::MoveEvent::Failed(e)) => self.show_error(e),

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'">
+<title>MrSizeMe – Wohin ist der Platz auf der Platte?</title>
+<meta name="description" content="MrSizeMe zeigt, welche Ordner und Dateien den Platz auf Ihren Platten belegen – mit Aufräumhilfe, Verlauf und Prognose. Für Windows, macOS und Linux.">
+<link rel="icon" href="img/icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap">
+  <img src="img/icon.png" alt="">
+  <strong>MrSizeMe</strong>
+  <nav><a href="#funktionen">Funktionen</a><a href="#download">Download</a><a href="en/">English</a></nav>
+</div></header>
+
+<main class="wrap">
+<section class="hero">
+  <h1>Wohin ist der Platz auf der Platte?</h1>
+  <p>MrSizeMe zeigt in Sekunden, welche Ordner und Dateien Ihren Speicher füllen – und hilft beim sicheren Aufräumen. Für Windows, macOS und Linux, kostenlos und quelloffen.</p>
+  <a class="button" href="https://github.com/MrMarkus42/MrSizeMe/releases/latest">Kostenlos herunterladen</a>
+  <p class="small">Windows (Installer oder portabel) · macOS (.dmg) · Linux</p>
+  <img class="shot" src="img/hauptfenster-hell.png" alt="Das Hauptfenster von MrSizeMe mit Ordnerliste und Kachelkarte" width="1400" height="820">
+</section>
+
+<h2 id="funktionen">Funktionen</h2>
+<div class="grid">
+  <div class="card"><h3>Schneller Scan, alle Ordner</h3><p>Mehrere Threads; unter Windows auf Wunsch mit Admin-Rechten direkt über die NTFS-Tabelle. Das Fenster selbst läuft nie mit erhöhten Rechten.</p></div>
+  <div class="card"><h3>Viele Ansichten</h3><p>Ordnerbaum, Kachelkarte, Ringdiagramm, Dateitypen, Kategorien, größte und älteste Dateien, Altersverteilung, Suche mit Filtern.</p></div>
+  <div class="card"><h3>Aufräumhilfe mit Ampel</h3><p>Rund 40 bekannte große Ordner (WinSxS, Caches, iPhone-Backups, node_modules …) mit dem sicheren Weg zum Aufräumen. Nur Papierkorb, nie endgültig.</p></div>
+  <div class="card"><h3>KI fragen – wenn Sie wollen</h3><p>Google-KI-Modus, lokale KI (Ollama), Gemini oder Claude mit eigenem Schlüssel. Sie sehen vorher genau, was gesendet wird: nur Ordnername und Größe.</p></div>
+  <div class="card"><h3>Verlauf und Prognose</h3><p>„Seit letzter Woche ist Downloads um 12 GB gewachsen.“ – „Bei diesem Tempo ist die Platte in etwa 2 Monaten voll.“ Dazu eine Warnung bei wenig Platz.</p></div>
+  <div class="card"><h3>Live-Aktualisierung</h3><p>Nach dem Scan folgen die Zahlen den Änderungen auf der Platte – ohne neuen Scan.</p></div>
+  <div class="card"><h3>Duplikate, Cloud, Programme</h3><p>Doppelte Dateien per Prüfsumme, OneDrive/iCloud „nur online behalten“, Platz pro Programm samt Daten und Caches.</p></div>
+  <div class="card"><h3>Verschieben-Assistent</h3><p>Große Ordner auf eine andere Platte: erst kopieren und prüfen, dann das Original entfernen – auf Wunsch mit Verknüpfung am alten Ort.</p></div>
+  <div class="card"><h3>Export und Kommandozeile</h3><p>CSV, Excel, HTML-Bericht und JSON. Dazu „Mit MrSizeMe anzeigen“ im Rechtsklick-Menü – nur wenn Sie es einschalten.</p></div>
+</div>
+
+<h2>Bilder</h2>
+<div class="gallery">
+  <figure><img src="img/verlauf-hell.png" alt="Verlauf mit Vergleich und Prognose" loading="lazy" width="1400" height="860"><figcaption>Verlauf, Vergleich und Prognose</figcaption></figure>
+  <figure><img src="img/aufraeumen-hell.png" alt="Aufräumvorschläge mit Ampel" loading="lazy" width="1400" height="820"><figcaption>Aufräumvorschläge mit Ampel</figcaption></figure>
+  <figure><img src="img/was-ist-das-dunkel.png" alt="Fenster „Was ist das? Darf das weg?“" loading="lazy" width="1400" height="820"><figcaption>„Was ist das? Darf das weg?“</figcaption></figure>
+  <figure><img src="img/ring-kategorien-dunkel.png" alt="Ringdiagramm und Kategorien im dunklen Modus" loading="lazy" width="1400" height="820"><figcaption>Ringdiagramm und Kategorien</figcaption></figure>
+  <figure><img src="img/cloud-hell.png" alt="Cloud-Ordner: lokal und nur online" loading="lazy" width="1400" height="820"><figcaption>Cloud-Ordner: was liegt wirklich auf der Platte?</figcaption></figure>
+  <figure><img src="img/programme-dunkel.png" alt="Platz pro Programm" loading="lazy" width="1400" height="820"><figcaption>Platz pro Programm</figcaption></figure>
+</div>
+
+<h2>Datenschutz und Sicherheit</h2>
+<ul>
+  <li>Gelesen werden nur Namen, Größen und Daten – Dateiinhalte nur bei der Duplikatsuche, die Sie selbst starten, und nur auf Ihrem Computer.</li>
+  <li>Ins Internet geht das Programm nur, wenn Sie die KI fragen oder (nach Ihrer Erlaubnis) nach Updates suchen. Der Schalter „Komplett offline“ sperrt alles.</li>
+  <li>Updates sind signiert. Eine Datei mit falscher Signatur wird nicht installiert.</li>
+  <li>Gelöscht wird nichts endgültig ohne Rückfrage; System- und Benutzerordner sind geschützt.</li>
+</ul>
+
+<h2 id="download">Download</h2>
+<table>
+  <tr><th>System</th><th>Datei</th></tr>
+  <tr><td>Windows 10/11</td><td>Installer <code>…-windows-x64-setup.exe</code> oder portabel <code>…-windows-x64-portable.zip</code></td></tr>
+  <tr><td>macOS 11 oder neuer</td><td><code>…-macos.dmg</code> (Apple-Chip und Intel). Beim ersten Start: Rechtsklick auf MrSizeMe → „Öffnen“.</td></tr>
+  <tr><td>Linux</td><td><code>…-linux-x86_64.tar.gz</code></td></tr>
+</table>
+<p><a class="button" href="https://github.com/MrMarkus42/MrSizeMe/releases/latest">Zur neuesten Version</a></p>
+<p class="small">Zu jeder Datei gibt es eine SHA-256-Prüfsumme (<code>SHA256SUMS.txt</code>) und eine minisign-Signatur (<code>.minisig</code>). Prüfen unter Windows: <code>Get-FileHash Datei</code>.</p>
+</main>
+
+<footer><div class="wrap">
+  MrSizeMe von Mr. M · MIT- oder Apache-2.0-Lizenz · <a href="https://github.com/MrMarkus42/MrSizeMe">Quellcode</a> · <a href="https://github.com/MrMarkus42/MrSizeMe/blob/main/SECURITY.md">Sicherheit</a>
+</div></footer>
+</body>
+</html>

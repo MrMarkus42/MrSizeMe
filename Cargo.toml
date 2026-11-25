@@ -34,6 +34,8 @@ notify = { version = "8.2", default-features = false, features = ["macos_fsevent
 sha2 = "0.11"
 # Checksums inside the Excel export (ZIP format).
 crc32fast = "1"
+# Checks the signature of downloaded updates (minisign).
+minisign-verify = "0.3"
 
 [target.'cfg(unix)'.dependencies]
 # Free space of a disk (statvfs).
@@ -66,6 +68,10 @@ ureq = { version = "3", default-features = false, features = ["rustls", "json"] 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Keychain for the user's own AI keys (already used by the TLS layer).
 security-framework = "3"
+
+[build-dependencies]
+# Windows: program icon and version inside the .exe.
+embed-resource = "3"
 
 [dev-dependencies]
 egui_kittest = { version = "=0.37.0", features = ["eframe", "wgpu"] }

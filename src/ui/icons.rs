@@ -58,6 +58,7 @@ pub enum Icon {
     Sheet,
     Report,
     Menu,
+    Update,
 }
 
 const BLUE: Color32 = Color32::from_rgb(59, 130, 246);
@@ -470,6 +471,11 @@ pub fn draw(p: &Painter, rect: Rect, icon: Icon, ink: Color32, paper: Color32, e
                 pen.filled(7.5, *y, 11.0, 2.0, c);
             }
             pen.closed(&[(2.0, 9.0), (2.0, 18.0), (7.5, 14.5)], ink);
+        }
+        Icon::Update => {
+            pen.arc((12.0, 12.0), 8.5, (-2.6, 2.2), blue, w * 1.3);
+            pen.p.add(Shape::line(vec![pen.at(12.0, 6.5), pen.at(12.0, 15.0)], Stroke::new(w * 1.3, blue)));
+            pen.arrow_head((12.0, 17.5), vec2(0.0, 1.0), blue);
         }
         Icon::History => {
             pen.circle(12.0, 12.0, 9.0, teal.gamma_multiply(0.3));

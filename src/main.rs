@@ -22,6 +22,19 @@ fn main() -> ExitCode {
         let code = mrsizeme::elevate::run_helper(Path::new(root), Path::new(out));
         return ExitCode::from(u8::try_from(code).unwrap_or(1));
     }
+    // Used by the uninstaller: removes the right-click menu entry again.
+    if args.first().is_some_and(|a| a == "--remove-menu-entry") {
+        return match mrsizeme::shell::uninstall() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(_) => ExitCode::FAILURE,
+        };
+    }
+    // Checks a release file with the built-in update key (release check).
+    if args.first().is_some_and(|a| a == "--verify-update") {
+        attach_console();
+        let (Some(file), Some(sig)) = (args.get(1), args.get(2)) else { return ExitCode::from(2) };
+        return cli::verify_file(Path::new(file), Path::new(sig));
+    }
     if args.first().is_some_and(|a| a == "--scan" || a == "--help" || a == "-h") {
         attach_console();
         return match cli::Args::parse(&args) {

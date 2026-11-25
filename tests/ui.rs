@@ -445,3 +445,33 @@ fn context_menu_entry_asks_first() {
     assert!(h.query_by_label("Fehler").is_none());
     assert!(h.query_all_by_label_contains("hinzufügen?").next().is_none());
 }
+
+#[test]
+fn update_question_and_offline_check() {
+    let _guard = lock();
+    let t = sample();
+    setup();
+    i18n::set_lang(Lang::De);
+    let tree = scan(t.path(), &Options::default(), &Progress::default()).unwrap();
+    let mut h = Harness::builder()
+        .with_size(eframe::egui::vec2(1200.0, 760.0))
+        .with_max_steps(32)
+        .build_eframe(move |_cc| App::with_tree(tree).with_update_question());
+    h.run();
+    assert!(h.query_all_by_label_contains("Darf MrSizeMe gelegentlich nachsehen").next().is_some());
+    h.get_by_label("Nein").click();
+    h.run();
+    assert!(h.query_all_by_label_contains("Darf MrSizeMe gelegentlich nachsehen").next().is_none());
+
+    // With "fully offline" a manual check only says so.
+    h.get_all_by_label("Aufräumen").next().unwrap().click();
+    h.run();
+    h.get_by_label("Komplett offline").click();
+    h.run();
+    h.get_by_label("Hilfe").click();
+    h.run();
+    h.get_by_label("Nach Updates suchen").click();
+    h.run();
+    assert!(h.query_all_by_label_contains("es wird nicht nach Updates gesucht").next().is_some());
+    assert!(h.query_by_label("Fehler").is_none());
+}

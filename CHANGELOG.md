@@ -80,3 +80,16 @@
 - "Show with MrSizeMe" in the right-click menu of folders, only on request
   and removable: Windows (registry below HKEY_CURRENT_USER), macOS (Quick
   Action), Linux (Nautilus script, Dolphin service menu).
+- Updates: asked at the first start whether to look for updates at all; never,
+  daily, weekly or monthly; manual check in the Help tab. Downloads only from
+  the project's GitHub releases, checked with the minisign key built into the
+  program; unsigned or wrongly signed files are refused. Installer, portable
+  version (replaces its own program file), macOS disk image, Linux archive.
+- Portable mode: a file `portable.txt` next to the program keeps settings,
+  history and log in the folder `MrSizeMe-Daten` next to it.
+- Windows program file with icon and version information.
+- Packaging: Inno Setup installer (per user, or for all users after a
+  question), portable ZIP, universal macOS app in a .dmg, Linux archive with
+  menu entry; release workflow that builds everything into a DRAFT release
+  with SHA-256 checksums; scripts to make the key, sign and verify.
+- Website (German and English) in `website/`, published only by hand.

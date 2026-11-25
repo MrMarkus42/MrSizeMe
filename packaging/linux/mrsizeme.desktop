@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MrSizeMe
+Comment=Shows which folders and files use the space on your disks
+Comment[de]=Zeigt, welche Ordner und Dateien den Platz auf Ihren Platten belegen
+Exec=mrsizeme %f
+Icon=mrsizeme
+Terminal=false
+Categories=Utility;System;Filesystem;
