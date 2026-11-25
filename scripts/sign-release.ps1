@@ -1,4 +1,4 @@
-# Signs the files of a DRAFT release with your secret key and uploads the
+﻿# Signs the files of a DRAFT release with your secret key and uploads the
 # signatures. Run on your own computer after the release workflow made the
 # draft:  .\scripts\sign-release.ps1 v1.0.0
 #

@@ -1,4 +1,4 @@
-# Makes the key pair for signing updates. Run once, on your own computer.
+﻿# Makes the key pair for signing updates. Run once, on your own computer.
 #
 # The secret key is written to your user folder (never into the project) and
 # is protected by a password that minisign asks for. Only the public key
