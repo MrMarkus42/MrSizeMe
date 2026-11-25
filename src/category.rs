@@ -194,7 +194,7 @@ pub fn by_category(tree: &Tree, start: NodeId) -> Vec<CategoryStats> {
         .collect();
     walk_files(tree, start, |id, cat| {
         let n = tree.node(id);
-        if n.has(crate::tree::flags::HARDLINK_DUP) {
+        if n.has(crate::tree::flags::HARDLINK_DUP | crate::tree::flags::ONLINE_ONLY) {
             return;
         }
         let s = &mut v[cat as usize];

@@ -196,7 +196,9 @@ fn read_folder(job: Job, sizer: &Sizer, progress: &Progress) -> Listing {
             progress.dirs.fetch_add(1, Ordering::Relaxed);
         } else {
             progress.files.fetch_add(1, Ordering::Relaxed);
-            progress.bytes.fetch_add(e.size, Ordering::Relaxed);
+            if !e.online_only {
+                progress.bytes.fetch_add(e.size, Ordering::Relaxed);
+            }
         }
     }
     if error.is_some() {

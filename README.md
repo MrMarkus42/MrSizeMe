@@ -24,8 +24,8 @@ up safely. It runs on Windows, macOS and Linux and speaks German and English.
 * Menu band with its own icons, keyboard shortcuts.
 * Clean-up help: knowledge list with traffic light, savings overview,
   recycle bin with protection of system folders, and an optional AI
-  question (Google, local Ollama, Gemini, Claude) that shows exactly what
-  is sent.
+  question (Google, local Ollama, Gemini, Claude, OpenRouter) that shows
+  exactly what is sent.
 * History of earlier scans with comparison, size chart and forecast when
   the disk will be full; warning when a disk is nearly full.
 * Live update: the numbers follow changes on the disk without a new scan.

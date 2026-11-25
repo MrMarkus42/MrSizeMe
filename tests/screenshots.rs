@@ -80,11 +80,15 @@ fn cleanup_tree() -> Tree {
 }
 
 fn shot_with(tree: fn() -> Tree, dark: bool, lang: Lang, name: &str, clicks: &[&str]) {
+    shot_sized(tree, (1400.0, 820.0), dark, lang, name, clicks);
+}
+
+fn shot_sized(tree: fn() -> Tree, size: (f32, f32), dark: bool, lang: Lang, name: &str, clicks: &[&str]) {
     common::setup();
     i18n::set_lang(lang);
     let theme = if dark { egui::Theme::Dark } else { egui::Theme::Light };
     let mut h = Harness::builder()
-        .with_size(egui::vec2(1400.0, 820.0))
+        .with_size(egui::vec2(size.0, size.1))
         .with_max_steps(64)
         .with_theme(theme)
         .wgpu()
@@ -131,6 +135,10 @@ fn screenshots() {
         &["Aufräumen", "Aufräumen@last", "JavaScript-Pakete (node_modules)", "Was ist das?"],
     );
     shot(false, Lang::En, "main-window-light-en", &["Ring chart", "Categories"]);
+    shot(false, Lang::De, "einstellungen-hell", &["Einstellungen"]);
+    shot(true, Lang::De, "einstellungen-ki-dunkel", &["Einstellungen", "KI"]);
+    // A narrow window: the menu band shows only icons.
+    shot_sized(cleanup_tree, (820.0, 640.0), false, Lang::De, "schmal-hell", &[]);
 }
 
 /// The home folder at step `s` of a month: downloads and caches grow.

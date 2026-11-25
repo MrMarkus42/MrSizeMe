@@ -173,7 +173,7 @@ pub fn age_distribution(tree: &Tree, start: NodeId, now: i64) -> [AgeStats; 7] {
     let mut out = [AgeStats::default(); 7];
     walk_files(tree, start, |id, _| {
         let n = tree.node(id);
-        if n.has(flags::HARDLINK_DUP) {
+        if n.has(flags::HARDLINK_DUP | flags::ONLINE_ONLY) {
             return;
         }
         let s = &mut out[AgeGroup::of(n.modified, now) as usize];

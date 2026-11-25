@@ -222,10 +222,10 @@ pub fn cloud(ui: &mut egui::Ui, tree: &Tree, parts: &[CloudPart]) -> (Vec<Action
                     .striped(true)
                     .vscroll(false)
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .column(Column::remainder().at_least(140.0).clip(true))
-                    .column(Column::initial(110.0))
-                    .column(Column::initial(90.0))
-                    .column(Column::initial(140.0))
+                    .column(Column::remainder().at_least(100.0).clip(true))
+                    .column(Column::initial(96.0).at_least(70.0).clip(true))
+                    .column(Column::initial(80.0).at_least(60.0).clip(true))
+                    .column(Column::auto())
                     .header(ROW, |mut h| {
                         for label in [t.col_name, t.col_local, t.col_online, ""] {
                             h.col(|ui| {

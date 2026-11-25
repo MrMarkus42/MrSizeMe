@@ -31,7 +31,7 @@ pub fn by_type(tree: &Tree, start: NodeId) -> Vec<TypeStats> {
         match n.kind {
             Kind::Dir => stack.extend_from_slice(tree.children(id)),
             Kind::File => {
-                if n.has(flags::HARDLINK_DUP) {
+                if n.has(flags::HARDLINK_DUP | flags::ONLINE_ONLY) {
                     continue;
                 }
                 let ext = extension(&n.name_lossy());
@@ -61,7 +61,8 @@ pub fn largest_files(tree: &Tree, start: NodeId, limit: usize) -> Vec<NodeId> {
         let n = tree.node(id);
         match n.kind {
             Kind::Dir => stack.extend_from_slice(tree.children(id)),
-            Kind::File => files.push(id),
+            // Cloud files that are only online take no space on this computer.
+            Kind::File if !n.has(flags::ONLINE_ONLY) => files.push(id),
             _ => {}
         }
     }

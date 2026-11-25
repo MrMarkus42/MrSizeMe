@@ -132,6 +132,8 @@ pub struct Record {
     pub modified: i64,
     /// A link, junction or mount point: not followed.
     pub is_link: bool,
+    /// A cloud file whose content is only online (attributes in $STANDARD_INFORMATION).
+    pub online_only: bool,
     /// The run list of the unnamed data (only needed for the MFT itself).
     pub data_runs: Option<Vec<(u64, u64)>>,
 }
@@ -169,6 +171,9 @@ pub fn parse_record(rec: &[u8], number: u64) -> Option<Record> {
             (ATTR_STANDARD_INFORMATION, false) => {
                 let content = resident_content(attr)?;
                 r.modified = crate::platform::filetime_to_unix(u64_at(content, 0x08)? as i64);
+                // OFFLINE, RECALL_ON_OPEN, RECALL_ON_DATA_ACCESS: placeholders of cloud files.
+                let attributes = u32_at(content, 0x20).unwrap_or(0);
+                r.online_only = attributes & (0x1000 | 0x4_0000 | 0x40_0000) != 0;
             }
             (ATTR_FILE_NAME, false) => {
                 let content = resident_content(attr)?;
@@ -318,7 +323,9 @@ mod win {
                                 progress.dirs.fetch_add(1, Ordering::Relaxed);
                             } else {
                                 progress.files.fetch_add(1, Ordering::Relaxed);
-                                progress.bytes.fetch_add(r.size, Ordering::Relaxed);
+                                if !r.online_only {
+                                    progress.bytes.fetch_add(r.size, Ordering::Relaxed);
+                                }
                             }
                             records.push(Some(r));
                         }
@@ -389,6 +396,9 @@ mod win {
                 if kind == Kind::File {
                     n.size = r.size;
                     n.allocated = r.allocated;
+                    if r.online_only {
+                        n.flags |= crate::tree::flags::ONLINE_ONLY;
+                    }
                 }
                 n.modified = r.modified;
                 if kind == Kind::Dir {
@@ -540,6 +550,15 @@ mod tests {
         assert_eq!((r.size, r.allocated), (5000, 8192));
         assert_eq!(r.modified, 1_795_910_400);
         assert_eq!(r.data_runs, Some(vec![(0x20, 2)]));
+        assert!(!r.online_only);
+
+        // A OneDrive placeholder (RECALL_ON_DATA_ACCESS) is only online.
+        let mut info = std_info(t);
+        let content_at = usize::from(u16::from_le_bytes([info[0x14], info[0x15]]));
+        info[content_at + 0x20..content_at + 0x24].copy_from_slice(&0x40_0000u32.to_le_bytes());
+        let mut cloud = record(1, 0, &[info, file_name(5, "Video.mp4", 1)]);
+        assert!(apply_fixups(&mut cloud));
+        assert!(parse_record(&cloud, 43).unwrap().online_only);
 
         // A torn record (stride end does not match) is refused.
         let mut torn = record(1, 0, &[]);

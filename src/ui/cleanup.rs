@@ -44,11 +44,18 @@ pub struct State {
     pub provider: Provider,
     running: Option<JoinHandle<io::Result<String>>>,
     answer: Option<Result<String, String>>,
+    /// The user asked for the AI settings (the settings window opens there).
     pub show_settings: bool,
-    gemini_input: String,
-    claude_input: String,
-    stored: Option<(bool, bool)>,
+    /// Keys being typed, per service.
+    key_inputs: std::collections::HashMap<&'static str, String>,
+    /// Which services have a stored key (looked up once).
+    stored: std::collections::HashMap<&'static str, bool>,
     ollama_models: Vec<String>,
+    router_job: Option<JoinHandle<io::Result<Vec<ai::RouterModel>>>>,
+    router_models: Vec<ai::RouterModel>,
+    router_filter: String,
+    router_free_only: bool,
+    router_error: Option<String>,
     suggestions: Option<(u64, NodeId, Vec<Suggestion>)>,
 }
 
@@ -61,10 +68,14 @@ impl Default for State {
             running: None,
             answer: None,
             show_settings: false,
-            gemini_input: String::new(),
-            claude_input: String::new(),
-            stored: None,
+            key_inputs: std::collections::HashMap::new(),
+            stored: std::collections::HashMap::new(),
             ollama_models: Vec::new(),
+            router_job: None,
+            router_models: Vec::new(),
+            router_filter: String::new(),
+            router_free_only: false,
+            router_error: None,
             suggestions: None,
         }
     }
@@ -87,13 +98,26 @@ impl State {
         self.suggestions = None;
     }
 
-    fn stored_keys(&mut self) -> (bool, bool) {
-        *self.stored.get_or_insert_with(|| {
-            (secrets::get(secrets::GEMINI).is_some(), secrets::get(secrets::CLAUDE).is_some())
-        })
+    /// True if a key is stored for the service (asked once, then remembered).
+    fn key_stored(&mut self, service: &'static str) -> bool {
+        *self.stored.entry(service).or_insert_with(|| secrets::get(service).is_some())
     }
 
     pub fn poll(&mut self, ctx: &egui::Context) {
+        if let Some(h) = &self.router_job {
+            if h.is_finished() {
+                match self.router_job.take().map(|h| h.join()) {
+                    Some(Ok(Ok(list))) => {
+                        self.router_models = list;
+                        self.router_error = None;
+                    }
+                    Some(Ok(Err(e))) => self.router_error = Some(e.to_string()),
+                    _ => {}
+                }
+            } else {
+                ctx.request_repaint_after(std::time::Duration::from_millis(150));
+            }
+        }
         let Some(h) = &self.running else { return };
         if !h.is_finished() {
             ctx.request_repaint_after(std::time::Duration::from_millis(150));
@@ -195,7 +219,8 @@ pub fn info_window(ctx: &egui::Context, tree: &Tree, state: &mut State, settings
     let entry = knowledge::lookup(tree, id);
     let protection = trash::protection(&path);
     let mut open = true;
-    let (stored_gemini, stored_claude) = state.stored_keys();
+    let has_key: std::collections::HashMap<&str, bool> =
+        Provider::ALL.iter().filter_map(|p| p.key_service()).map(|s| (s, state.key_stored(s))).collect();
     egui::Window::new(t.info_title)
         .id(egui::Id::unique("info_window"))
         .open(&mut open)
@@ -250,17 +275,8 @@ pub fn info_window(ctx: &egui::Context, tree: &Tree, state: &mut State, settings
                 ui.separator();
                 ui.strong(t.ai_heading);
                 ui.horizontal_wrapped(|ui| {
-                    for (i, p) in [
-                        Provider::GoogleAi,
-                        Provider::GoogleSearch,
-                        Provider::Ollama,
-                        Provider::Gemini,
-                        Provider::Claude,
-                    ]
-                    .into_iter()
-                    .enumerate()
-                    {
-                        if ui.selectable_value(&mut state.provider, p, t.providers[i]).changed() {
+                    for p in Provider::ALL {
+                        if ui.selectable_value(&mut state.provider, p, t.providers[p.index()]).changed() {
                             state.answer = None;
                         }
                     }
@@ -272,9 +288,13 @@ pub fn info_window(ctx: &egui::Context, tree: &Tree, state: &mut State, settings
                 let p = state.provider;
                 let blocked_offline = settings.offline && p.is_online();
                 let missing = match p {
-                    Provider::Gemini if !stored_gemini => Some(t.ai_no_key),
-                    Provider::Claude if !stored_claude => Some(t.ai_no_key),
+                    _ if p.key_service().is_some_and(|s| !has_key.get(s).copied().unwrap_or(false)) => {
+                        Some(t.ai_no_key)
+                    }
                     Provider::Ollama if settings.ollama_model.trim().is_empty() => Some(t.ai_no_model),
+                    Provider::OpenRouter if settings.openrouter_model.trim().is_empty() => {
+                        Some(t.ai_no_model)
+                    }
                     _ => None,
                 };
                 if blocked_offline {
@@ -303,11 +323,7 @@ pub fn info_window(ctx: &egui::Context, tree: &Tree, state: &mut State, settings
                         )
                         .clicked()
                     {
-                        let key = match p {
-                            Provider::Gemini => secrets::get(secrets::GEMINI),
-                            Provider::Claude => secrets::get(secrets::CLAUDE),
-                            _ => None,
-                        };
+                        let key = p.key_service().and_then(secrets::get);
                         let settings = settings.clone();
                         let q = question.clone();
                         log::info!("AI question sent ({p:?})");
@@ -388,116 +404,157 @@ pub fn confirm_window(ctx: &egui::Context, tree: &Tree, state: &mut State) -> Op
     result
 }
 
-/// The AI settings. Returns true when a setting changed (to save it).
-pub fn settings_window(
-    ctx: &egui::Context,
-    state: &mut State,
-    settings: &mut Settings,
-) -> (bool, Option<String>) {
-    if !state.show_settings {
-        return (false, None);
-    }
+/// The AI part of the settings window. Returns an error text, if any.
+pub fn ai_section(ui: &mut egui::Ui, state: &mut State, settings: &mut Settings) -> Option<String> {
     let t = tr();
-    let before = settings.clone();
     let mut error = None;
-    let mut open = true;
-    let (stored_gemini, stored_claude) = state.stored_keys();
-    let mut reset_stored = false;
-    egui::Window::new(t.ai_settings_title)
-        .id(egui::Id::unique("ai_settings"))
-        .open(&mut open)
-        .pivot(egui::Align2::CENTER_CENTER)
-        .default_pos(ctx.content_rect().center())
-        .collapsible(false)
-        .default_width(520.0)
-        .show(ctx, |ui| {
-            ui.checkbox(&mut settings.offline, t.btn_offline).on_hover_text(t.tip_offline);
-            ui.separator();
 
-            ui.strong(t.providers[2]);
-            ui.label(RichText::new(t.ai_ollama_hint).small().weak());
-            egui::Grid::new("ollama_grid").num_columns(2).show(ui, |ui| {
-                let l = ui.label(t.ai_address);
-                ui.add(egui::TextEdit::singleline(&mut settings.ollama_url).desired_width(260.0))
-                    .labelled_by(l.id);
+    // Preselected AI in "What is this?".
+    ui.strong(t.set_default_ai);
+    ui.horizontal_wrapped(|ui| {
+        for p in Provider::ALL {
+            if ui.selectable_value(&mut settings.ai_provider, p, t.providers[p.index()]).changed() {
+                state.provider = p;
+            }
+        }
+    });
+    ui.separator();
+
+    // Local AI.
+    ui.strong(t.providers[Provider::Ollama.index()]);
+    ui.label(RichText::new(t.ai_ollama_hint).small().weak());
+    egui::Grid::new("ollama_grid").num_columns(2).show(ui, |ui| {
+        let l = ui.label(t.ai_address);
+        ui.add(egui::TextEdit::singleline(&mut settings.ollama_url).desired_width(260.0)).labelled_by(l.id);
+        ui.end_row();
+        let l = ui.label(t.ai_model);
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(&mut settings.ollama_model).desired_width(180.0))
+                .labelled_by(l.id);
+            if ui.button(t.ai_load_models).clicked() {
+                match ai::ollama_models(settings) {
+                    Ok(m) => state.ollama_models = m,
+                    Err(e) => error = Some(format!("Ollama: {e}")),
+                }
+            }
+        });
+        ui.end_row();
+    });
+    if !state.ollama_models.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            for m in &state.ollama_models {
+                if ui.selectable_label(settings.ollama_model == *m, m).clicked() {
+                    settings.ollama_model = m.clone();
+                }
+            }
+        });
+    }
+    ui.separator();
+
+    // Services with the user's own key.
+    for p in [Provider::OpenRouter, Provider::Gemini, Provider::Claude] {
+        let service = p.key_service().expect("these need a key");
+        // For the model list (only the offline switch matters there).
+        let for_list = settings.clone();
+        let stored = state.key_stored(service);
+        ui.push_id(service, |ui| {
+            ui.strong(t.providers[p.index()]);
+            if p == Provider::OpenRouter {
+                ui.label(RichText::new(t.ai_openrouter_hint).small().weak());
+            }
+            ui.label(RichText::new(if stored { t.ai_key_stored } else { t.ai_key_missing }).small());
+            egui::Grid::new("key_grid").num_columns(2).show(ui, |ui| {
+                let l = ui.label(t.ai_key);
+                ui.horizontal(|ui| {
+                    let input = state.key_inputs.entry(service).or_default();
+                    ui.add(egui::TextEdit::singleline(input).password(true).desired_width(220.0))
+                        .labelled_by(l.id);
+                    if ui.add_enabled(!input.trim().is_empty(), egui::Button::new(t.ai_save)).clicked() {
+                        match secrets::set(service, input.trim()) {
+                            Ok(()) => {
+                                input.clear();
+                                state.stored.remove(service);
+                            }
+                            Err(e) => error = Some(e.to_string()),
+                        }
+                    }
+                    if ui.add_enabled(stored, egui::Button::new(t.ai_remove)).clicked() {
+                        if let Err(e) = secrets::delete(service) {
+                            error = Some(e.to_string());
+                        }
+                        state.stored.remove(service);
+                    }
+                });
                 ui.end_row();
+                let model = match p {
+                    Provider::OpenRouter => &mut settings.openrouter_model,
+                    Provider::Gemini => &mut settings.gemini_model,
+                    _ => &mut settings.claude_model,
+                };
                 let l = ui.label(t.ai_model);
                 ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut settings.ollama_model).desired_width(180.0))
-                        .labelled_by(l.id);
-                    if ui.button(t.ai_load_models).clicked() {
-                        match ai::ollama_models(settings) {
-                            Ok(m) => state.ollama_models = m,
-                            Err(e) => error = Some(format!("Ollama: {e}")),
+                    ui.add(egui::TextEdit::singleline(model).desired_width(220.0)).labelled_by(l.id);
+                    if p == Provider::OpenRouter {
+                        let busy = state.router_job.is_some();
+                        if ui.add_enabled(!busy, egui::Button::new(t.ai_load_models)).clicked() {
+                            let s = for_list.clone();
+                            state.router_job = std::thread::Builder::new()
+                                .name("openrouter models".into())
+                                .spawn(move || ai::openrouter_models(&s))
+                                .ok();
+                        }
+                        if busy {
+                            ui.spinner();
                         }
                     }
                 });
                 ui.end_row();
             });
-            if !state.ollama_models.is_empty() {
-                ui.horizontal_wrapped(|ui| {
-                    for m in &state.ollama_models {
-                        if ui.selectable_label(settings.ollama_model == *m, m).clicked() {
-                            settings.ollama_model = m.clone();
-                        }
-                    }
-                });
+            if p == Provider::OpenRouter {
+                router_models(ui, state, settings);
             }
-            ui.separator();
-
-            for (label, service, stored, input, model) in [
-                (
-                    t.providers[3],
-                    secrets::GEMINI,
-                    stored_gemini,
-                    &mut state.gemini_input,
-                    &mut settings.gemini_model,
-                ),
-                (
-                    t.providers[4],
-                    secrets::CLAUDE,
-                    stored_claude,
-                    &mut state.claude_input,
-                    &mut settings.claude_model,
-                ),
-            ] {
-                ui.strong(label);
-                ui.label(RichText::new(if stored { t.ai_key_stored } else { t.ai_key_missing }).small());
-                egui::Grid::new(format!("grid_{service}")).num_columns(2).show(ui, |ui| {
-                    let l = ui.label(t.ai_key);
-                    ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(input).password(true).desired_width(220.0))
-                            .labelled_by(l.id);
-                        if ui.add_enabled(!input.trim().is_empty(), egui::Button::new(t.ai_save)).clicked() {
-                            match secrets::set(service, input) {
-                                Ok(()) => {
-                                    input.clear();
-                                    reset_stored = true;
-                                }
-                                Err(e) => error = Some(e.to_string()),
-                            }
-                        }
-                        if ui.add_enabled(stored, egui::Button::new(t.ai_remove)).clicked() {
-                            if let Err(e) = secrets::delete(service) {
-                                error = Some(e.to_string());
-                            }
-                            reset_stored = true;
-                        }
-                    });
-                    ui.end_row();
-                    let l = ui.label(t.ai_model);
-                    ui.add(egui::TextEdit::singleline(model).desired_width(220.0)).labelled_by(l.id);
-                    ui.end_row();
-                });
-                ui.add_space(4.0);
-            }
-            ui.label(RichText::new(t.ai_key_hint).small().weak());
         });
-    if reset_stored {
-        state.stored = None;
+        ui.add_space(6.0);
     }
-    if !open {
-        state.show_settings = false;
+    ui.label(RichText::new(t.ai_key_hint).small().weak());
+    error
+}
+
+/// The model list of OpenRouter with search and "free only".
+fn router_models(ui: &mut egui::Ui, state: &mut State, settings: &mut Settings) {
+    let t = tr();
+    if let Some(e) = &state.router_error {
+        ui.colored_label(ui.visuals().error_fg_color, format!("OpenRouter: {e}"));
     }
-    (*settings != before, error)
+    if state.router_models.is_empty() {
+        return;
+    }
+    ui.horizontal(|ui| {
+        let l = ui.label(t.ai_search);
+        ui.add(egui::TextEdit::singleline(&mut state.router_filter).desired_width(180.0)).labelled_by(l.id);
+        ui.checkbox(&mut state.router_free_only, t.ai_only_free);
+    });
+    let needle = state.router_filter.to_lowercase();
+    let shown: Vec<&ai::RouterModel> = state
+        .router_models
+        .iter()
+        .filter(|m| !state.router_free_only || m.free)
+        .filter(|m| {
+            needle.is_empty()
+                || m.id.to_lowercase().contains(&needle)
+                || m.name.to_lowercase().contains(&needle)
+        })
+        .take(300)
+        .collect();
+    egui::ScrollArea::vertical().id_salt("router_list").max_height(180.0).show(ui, |ui| {
+        for m in shown {
+            let mut text = format!("{}  ({})", m.name, m.id);
+            if m.free {
+                text = format!("{text}  · {}", t.ai_free);
+            }
+            if ui.selectable_label(settings.openrouter_model == m.id, text).clicked() {
+                settings.openrouter_model = m.id.clone();
+            }
+        }
+    });
 }

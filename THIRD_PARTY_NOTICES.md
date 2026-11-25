@@ -70,6 +70,7 @@ included in their source distributions (crates.io).
 | core-graphics-types | 0.1.3 | MIT OR Apache-2.0 | https://github.com/servo/core-foundation-rs |
 | cpufeatures | 0.3.1 | MIT OR Apache-2.0 | https://github.com/RustCrypto/utils |
 | crc32fast | 1.5.5 | MIT OR Apache-2.0 | https://github.com/srijs/rust-crc32fast |
+| crossbeam-channel | 0.5.17 | MIT OR Apache-2.0 | https://github.com/crossbeam-rs/crossbeam |
 | crossbeam-utils | 0.8.23 | MIT OR Apache-2.0 | https://github.com/crossbeam-rs/crossbeam |
 | crypto-common | 0.2.2 | MIT OR Apache-2.0 | https://github.com/RustCrypto/traits |
 | cursor-icon | 1.2.0 | MIT OR Apache-2.0 OR Zlib | https://github.com/rust-windowing/cursor-icon |
@@ -167,6 +168,7 @@ included in their source distributions (crates.io).
 | itertools | 0.15.0 | MIT OR Apache-2.0 | https://github.com/rust-itertools/itertools |
 | itoa | 1.0.19 | MIT OR Apache-2.0 | https://github.com/dtolnay/itoa |
 | jobserver | 0.1.35 | MIT OR Apache-2.0 | https://github.com/rust-lang/jobserver-rs |
+| keyboard-types | 0.8.3 | MIT OR Apache-2.0 | https://github.com/rust-windowing/keyboard-types |
 | khronos-egl | 6.0.0 | MIT/Apache-2.0 | https://github.com/timothee-haudebourg/khronos-egl |
 | khronos_api | 3.1.0 | Apache-2.0 | https://github.com/brendanzab/gl-rs/ |
 | kurbo | 0.13.1 | Apache-2.0 OR MIT | https://github.com/linebender/kurbo |
@@ -187,6 +189,7 @@ included in their source distributions (crates.io).
 | miniz_oxide | 0.9.1 | MIT OR Zlib OR Apache-2.0 | https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide |
 | mio | 1.2.4 | MIT | https://github.com/tokio-rs/mio |
 | moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 | https://github.com/awxkee/moxcms.git |
+| muda | 0.21.2 | Apache-2.0 OR MIT | https://github.com/tauri-apps/muda |
 | naga | 30.0.1 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
 | naga-types | 30.0.1 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
 | native-tls | 0.2.18 | MIT OR Apache-2.0 | https://github.com/rust-native-tls/rust-native-tls |

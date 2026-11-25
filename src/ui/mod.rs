@@ -5,11 +5,15 @@ mod folders;
 mod history_view;
 mod icons;
 mod lists;
+#[cfg(target_os = "macos")]
+mod macmenu;
 mod map;
 mod paint;
 mod places;
 mod ribbon;
 mod ring;
+mod settings_view;
+pub mod style;
 mod tools;
 mod updates;
 
@@ -82,7 +86,7 @@ struct Running {
 }
 
 /// The tabs of the menu band.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tab {
     Start,
     View,
@@ -105,6 +109,13 @@ pub(crate) enum Command {
     ExportHtml,
     /// Ask whether to add (true) or remove the right-click menu entry.
     AskShell(bool),
+    /// Open the settings window at a tab.
+    OpenSettings(settings_view::SettingsTab),
+    /// Light, dark or like the system (0 system, 1 light, 2 dark).
+    SetTheme(u8),
+    SetView(View),
+    SetChart(Chart),
+    OpenWebsite,
     CheckUpdates,
     /// Days between automatic update checks; `None` = never.
     SetUpdateEvery(Option<u16>),
@@ -214,6 +225,19 @@ pub struct App {
     upd: updates::State,
     /// Show the update question although the window runs in test mode.
     ask_updates: bool,
+    /// Width of each menu band tab when last shown in full.
+    ribbon_widths: std::collections::HashMap<Tab, f32>,
+    /// Fonts and text size were set (first frame).
+    style_applied: bool,
+    /// Window size in logical pixels (saved at the end).
+    window_size: Option<egui::Vec2>,
+    /// The settings window is open at this tab.
+    settings_tab: Option<settings_view::SettingsTab>,
+    /// macOS: the menu bar and the language it was built in.
+    #[cfg(target_os = "macos")]
+    mac_menu: Option<macmenu::MacMenu>,
+    #[cfg(target_os = "macos")]
+    mac_menu_lang: Option<Lang>,
 }
 
 /// The check for nearly full disks.
@@ -367,6 +391,14 @@ impl App {
             shell_installed: None,
             upd: updates::State::default(),
             ask_updates: false,
+            ribbon_widths: std::collections::HashMap::new(),
+            style_applied: false,
+            settings_tab: None,
+            window_size: None,
+            #[cfg(target_os = "macos")]
+            mac_menu: None,
+            #[cfg(target_os = "macos")]
+            mac_menu_lang: None,
         }
     }
 
@@ -685,6 +717,9 @@ impl App {
             Action::CopyPath(id) => ctx.copy_text(tree.path(id).display().to_string()),
             Action::Info(id) => {
                 self.selected = Some(id);
+                if self.cleanup.info.is_none() {
+                    self.cleanup.provider = self.settings.ai_provider;
+                }
                 self.cleanup.open_info(id);
             }
             // The scanned folder itself is never offered for the recycle bin.
@@ -809,9 +844,25 @@ impl App {
             ] {
                 ui.selectable_value(&mut self.tab, tab, egui::RichText::new(label).strong());
             }
+            // The settings, always at hand at the right end of the tab row.
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let compact = ribbon::is_compact();
+                ribbon::set_compact(false);
+                if ribbon::small(ui, icons::Icon::Gear, t.btn_settings, true, self.settings_tab.is_some())
+                    .clicked()
+                {
+                    cmds.push(Command::OpenSettings(settings_view::SettingsTab::General));
+                }
+                ribbon::set_compact(compact);
+            });
         });
         ui.add_space(2.0);
-        egui::ScrollArea::horizontal().id_salt("ribbon_scroll").show(ui, |ui| {
+        // Too narrow for the full band (measured when it was last shown in full): icons only.
+        let available = ui.available_width();
+        let compact = self.ribbon_widths.get(&self.tab).is_some_and(|&w| w > available);
+        ribbon::set_compact(compact);
+        let tab = self.tab;
+        let out = egui::ScrollArea::horizontal().id_salt("ribbon_scroll").show(ui, |ui| {
             ui.horizontal(|ui| match self.tab {
                 Tab::Start => {
                     group(ui, t.grp_scan, |ui| {
@@ -903,7 +954,7 @@ impl App {
                     group(ui, t.grp_lists, |ui| {
                         let mut list = |ui: &mut egui::Ui, view: View, icon: Icon, label: &str| {
                             if small(ui, icon, label, has_tree, self.view == view).clicked() {
-                                self.view = view;
+                                cmds.push(Command::SetView(view));
                             }
                         };
                         column(ui, |ui| {
@@ -927,10 +978,10 @@ impl App {
                     });
                     group(ui, t.grp_chart, |ui| {
                         if big(ui, Icon::TileMap, t.map_title, has_tree, self.chart == Chart::Map).clicked() {
-                            self.chart = Chart::Map;
+                            cmds.push(Command::SetChart(Chart::Map));
                         }
                         if big(ui, Icon::Ring, t.ring_title, has_tree, self.chart == Chart::Ring).clicked() {
-                            self.chart = Chart::Ring;
+                            cmds.push(Command::SetChart(Chart::Ring));
                         }
                         let parent = self.tree.as_ref().map(|tr| tr.node(self.map_root).parent);
                         let up = parent.filter(|&p| p != crate::tree::NO_PARENT);
@@ -972,7 +1023,12 @@ impl App {
                                 (egui::ThemePreference::System, Icon::Disk, t.theme_system),
                             ] {
                                 if small(ui, icon, label, true, pref == p).clicked() {
-                                    ui.ctx().set_theme(p);
+                                    let code = match p {
+                                        egui::ThemePreference::Light => 1,
+                                        egui::ThemePreference::Dark => 2,
+                                        egui::ThemePreference::System => 0,
+                                    };
+                                    cmds.push(Command::SetTheme(code));
                                 }
                             }
                         });
@@ -1037,7 +1093,14 @@ impl App {
                         {
                             cmds.push(Command::Node(Action::Info(id)));
                         }
-                        if big(ui, Icon::Gear, t.btn_ai_settings, true, self.cleanup.show_settings).clicked()
+                        if big(
+                            ui,
+                            Icon::Gear,
+                            t.btn_ai_settings,
+                            true,
+                            self.settings_tab == Some(settings_view::SettingsTab::Ai),
+                        )
+                        .clicked()
                         {
                             self.cleanup.show_settings = true;
                         }
@@ -1118,6 +1181,9 @@ impl App {
                         if big(ui, Icon::Log, t.log_folder, true, false).clicked() {
                             cmds.push(Command::LogFolder);
                         }
+                        if big(ui, Icon::Globe, t.mac_website, true, false).clicked() {
+                            cmds.push(Command::OpenWebsite);
+                        }
                     });
                     group(ui, t.grp_updates, |ui| {
                         if big(ui, Icon::Update, t.btn_check_updates, !self.upd.busy(), false).clicked() {
@@ -1146,6 +1212,10 @@ impl App {
                 }
             });
         });
+        if !compact {
+            self.ribbon_widths.insert(tab, out.content_size.x);
+        }
+        ribbon::set_compact(false);
         ui.add_space(2.0);
         cmds
     }
@@ -1258,6 +1328,19 @@ impl App {
             }
             Command::About => self.show_about = true,
             Command::Shortcuts => self.show_shortcuts = true,
+            Command::OpenSettings(tab) => self.settings_tab = Some(tab),
+            Command::SetView(v) => self.view = v,
+            Command::SetChart(c) => self.chart = c,
+            Command::OpenWebsite => {
+                if let Err(e) = external::open_url("https://mrmarkus42.github.io/MrSizeMe/") {
+                    self.show_error(format::io_error(&e));
+                }
+            }
+            Command::SetTheme(code) => {
+                self.settings.theme = code;
+                ctx.set_theme(settings_view::theme_preference(code));
+                self.save_settings();
+            }
             Command::SearchView => self.view = View::Search,
             Command::ToggleOffline => {
                 self.settings.offline = !self.settings.offline;
@@ -1290,6 +1373,7 @@ impl App {
             }
             Command::SetLang(l) => {
                 i18n::set_lang(l);
+                self.ribbon_widths.clear();
                 self.settings.lang = Some(l);
                 self.save_settings();
             }
@@ -1502,6 +1586,9 @@ impl App {
             if i.consume_shortcut(&cmd(Key::F)) {
                 cmds.push(Command::SearchView);
             }
+            if i.consume_shortcut(&cmd(Key::Comma)) {
+                cmds.push(Command::OpenSettings(settings_view::SettingsTab::General));
+            }
             if i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::C))
                 && let Some(id) = self.selected
             {
@@ -1580,7 +1667,11 @@ impl App {
                         match &live.status {
                             Status::Watching => {
                                 let green = egui::Color32::from_rgb(34, 197, 94);
-                                ui.label(egui::RichText::new(format!("● {}", t.live_on)).color(green))
+                                // A painted dot: the font may not have the circle sign.
+                                let (dot, _) =
+                                    ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+                                ui.painter().circle_filled(dot.center(), 4.0, green);
+                                ui.label(egui::RichText::new(t.live_on).color(green))
                                     .on_hover_text(t.tip_live);
                             }
                             Status::Starting => {
@@ -1823,12 +1914,40 @@ impl App {
     /// The whole window; also used by the tests.
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        if !self.style_applied {
+            self.style_applied = true;
+            style::apply(&ctx, self.settings.zoom);
+            if self.settings.theme != 0 {
+                ctx.set_theme(settings_view::theme_preference(self.settings.theme));
+            }
+        } else {
+            // Ctrl + plus/minus changed the text size (a new size works from the next frame on).
+            let zoom = (ctx.zoom_factor() * 100.0).round() as u16;
+            if zoom != self.settings.zoom {
+                self.settings.zoom = zoom;
+                self.ribbon_widths.clear();
+                self.save_settings();
+            }
+        }
+        if let Some(r) = ctx.input(|i| i.viewport().inner_rect) {
+            self.window_size = Some(r.size() * ctx.zoom_factor());
+        }
         self.poll_scan(&ctx);
         self.live_poll(&ctx);
         self.warn_poll(&ctx);
         self.update_title(&ctx);
         let mut actions = self.keyboard(&ctx);
         let mut cmds = self.global_keys(&ctx);
+        #[cfg(target_os = "macos")]
+        if self.auto {
+            if self.mac_menu_lang != Some(i18n::lang()) {
+                self.mac_menu_lang = Some(i18n::lang());
+                self.mac_menu = macmenu::build(&ctx);
+            }
+            if let Some(m) = &self.mac_menu {
+                cmds.extend(m.commands(self.selected));
+            }
+        }
 
         cmds.extend(Panel::top("ribbon").show(ui, |ui| self.ribbon(ui)).inner);
         cmds.extend(Panel::top("address").show(ui, |ui| self.address_bar(ui)).inner);
@@ -1842,6 +1961,8 @@ impl App {
                 .resizable(true)
                 .default_size(width)
                 .min_size(280.0)
+                // Wide lists never push the chart out of the window.
+                .max_size((ui.available_width() - 320.0).max(300.0))
                 .show(ui, |ui| self.left(ui));
             actions.extend(left.inner);
         }
@@ -1869,13 +1990,11 @@ impl App {
             actions.extend(cleanup::info_window(&ctx, tree, &mut self.cleanup, &self.settings));
             trash_now = cleanup::confirm_window(&ctx, tree, &mut self.cleanup);
         }
-        let (changed, settings_error) = cleanup::settings_window(&ctx, &mut self.cleanup, &mut self.settings);
-        if changed {
-            self.save_settings();
+        // "AI settings" in the "What is this?" window opens the settings at the AI tab.
+        if std::mem::take(&mut self.cleanup.show_settings) {
+            self.settings_tab = Some(settings_view::SettingsTab::Ai);
         }
-        if let Some(e) = settings_error {
-            self.show_error(e);
-        }
+        cmds.extend(self.settings_window(&ctx));
         if let Some(id) = trash_now {
             self.move_to_trash(id);
         }
@@ -1892,7 +2011,7 @@ impl App {
         let t = tr();
         let Some(tree) = &self.tree else { return Vec::new() };
         let mut actions = Vec::new();
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.selectable_value(&mut self.chart, Chart::Map, t.map_title);
             ui.selectable_value(&mut self.chart, Chart::Ring, t.ring_title);
             ui.separator();
@@ -1933,5 +2052,14 @@ fn home_or_empty() -> PathBuf {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.show(ui);
+    }
+
+    /// Remembers the window size for the next start.
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        if let Some(size) = self.window_size {
+            self.settings.window_w = size.x.round().clamp(0.0, 10_000.0) as u16;
+            self.settings.window_h = size.y.round().clamp(0.0, 10_000.0) as u16;
+            self.save_settings();
+        }
     }
 }

@@ -7,6 +7,21 @@ use super::icons::{self, Icon};
 
 /// Height of the button area of a group (without its caption).
 const BAND: f32 = 72.0;
+/// The same in the compact form for narrow windows (icons only).
+const BAND_COMPACT: f32 = 52.0;
+
+thread_local! {
+    static COMPACT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Narrow window: buttons show only their icon (the label as tooltip).
+pub fn set_compact(on: bool) {
+    COMPACT.with(|c| c.set(on));
+}
+
+pub fn is_compact() -> bool {
+    COMPACT.with(std::cell::Cell::get)
+}
 
 fn colors(ui: &Ui) -> (Color32, Color32) {
     let v = ui.visuals();
@@ -35,6 +50,15 @@ fn background(ui: &Ui, rect: Rect, resp: &Response, enabled: bool, selected: boo
 /// A large button: icon above, label below (up to two lines).
 pub fn big(ui: &mut Ui, icon: Icon, label: &str, enabled: bool, selected: bool) -> Response {
     let (ink, paper) = colors(ui);
+    if is_compact() {
+        let sense = if enabled { Sense::click() } else { Sense::hover() };
+        let (rect, resp) = ui.allocate_exact_size(vec2(40.0, BAND_COMPACT), sense);
+        background(ui, rect, &resp, enabled, selected);
+        let icon_rect = Rect::from_center_size(rect.center(), vec2(28.0, 28.0));
+        icons::draw(ui.painter(), icon_rect, icon, ink, paper, enabled);
+        resp.widget_info(|| WidgetInfo::selected(Role::Button, enabled, selected, label));
+        return resp.on_hover_text(label);
+    }
     let text_color = if enabled { ui.visuals().text_color() } else { ui.visuals().weak_text_color() };
     let galley = ui.painter().layout(label.to_owned(), FontId::proportional(12.0), text_color, 120.0);
     let w = galley.size().x.max(40.0) + 12.0;
@@ -52,6 +76,15 @@ pub fn big(ui: &mut Ui, icon: Icon, label: &str, enabled: bool, selected: bool) 
 /// A small button: icon left, label right.
 pub fn small(ui: &mut Ui, icon: Icon, label: &str, enabled: bool, selected: bool) -> Response {
     let (ink, paper) = colors(ui);
+    if is_compact() {
+        let sense = if enabled { Sense::click() } else { Sense::hover() };
+        let (rect, resp) = ui.allocate_exact_size(vec2(26.0, 16.0), sense);
+        background(ui, rect, &resp, enabled, selected);
+        let icon_rect = Rect::from_center_size(rect.center(), vec2(15.0, 15.0));
+        icons::draw(ui.painter(), icon_rect, icon, ink, paper, enabled);
+        resp.widget_info(|| WidgetInfo::selected(Role::Button, enabled, selected, label));
+        return resp.on_hover_text(label);
+    }
     let text_color = if enabled { ui.visuals().text_color() } else { ui.visuals().weak_text_color() };
     let galley = ui.painter().layout_no_wrap(label.to_owned(), FontId::proportional(12.0), text_color);
     let sense = if enabled { Sense::click() } else { Sense::hover() };
@@ -69,11 +102,14 @@ pub fn small(ui: &mut Ui, icon: Icon, label: &str, enabled: bool, selected: bool
 pub fn group(ui: &mut Ui, caption: &str, add: impl FnOnce(&mut Ui)) {
     let inner = ui.vertical(|ui| {
         ui.horizontal(|ui| {
-            ui.set_min_height(BAND);
+            ui.set_min_height(if is_compact() { BAND_COMPACT } else { BAND });
             ui.spacing_mut().item_spacing.x = 2.0;
             add(ui);
         });
         let width = ui.min_rect().width();
+        if is_compact() {
+            return;
+        }
         ui.allocate_ui_with_layout(vec2(width, 14.0), egui::Layout::top_down(egui::Align::Center), |ui| {
             ui.label(egui::RichText::new(caption).small().weak());
         });

@@ -109,15 +109,15 @@ pub fn show(
                         n.name_lossy().into_owned()
                     };
                     let mut label = egui::RichText::new(name);
-                    if n.has(flags::HARDLINK_DUP) || n.kind == Kind::Link || n.has(flags::SKIPPED) {
+                    if n.has(flags::HARDLINK_DUP | flags::SKIPPED | flags::ONLINE_ONLY)
+                        || n.kind == Kind::Link
+                    {
                         label = label.weak();
                     }
                     let resp = ui.add(egui::Label::new(label).truncate().selectable(false));
                     if n.has(flags::ERROR) {
                         let warn = ui.colored_label(ui.visuals().warn_fg_color, "⚠");
-                        if let Some(e) = tree.errors.get(&id) {
-                            warn.on_hover_text(e);
-                        }
+                        warn.on_hover_ui(|ui| error_tooltip(ui, tree, id));
                     }
                     let hint = if n.has(flags::NOT_SCANNED) {
                         Some(t.not_scanned)
@@ -125,6 +125,8 @@ pub fn show(
                         Some(t.skipped)
                     } else if n.has(flags::HARDLINK_DUP) {
                         Some(t.hardlink)
+                    } else if n.has(flags::ONLINE_ONLY) {
+                        Some(t.online_only_hint)
                     } else if n.kind == Kind::Link {
                         Some(t.link)
                     } else {
@@ -136,7 +138,13 @@ pub fn show(
                 });
                 row.col(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(format::size(n.size));
+                        if n.has(flags::ONLINE_ONLY) {
+                            // Only online: not counted, shown greyed with an explanation.
+                            ui.label(RichText::new(format::size(n.size)).weak().italics())
+                                .on_hover_text(t.online_only_hint);
+                        } else {
+                            ui.label(format::size(n.size));
+                        }
                     });
                 });
                 row.col(|ui| {
@@ -216,4 +224,45 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, id: NodeId, actions: &mut Vec<Acti
         actions.push(Action::AskTrash(id));
         ui.close();
     }
+}
+
+/// What the warning sign of a folder means: its own error, or the folders
+/// inside it that could not be read, with a tip what to do.
+pub(crate) fn error_tooltip(ui: &mut egui::Ui, tree: &Tree, id: NodeId) {
+    let t = tr();
+    ui.set_max_width(420.0);
+    let n = tree.node(id);
+    if n.has(flags::NOT_SCANNED) {
+        ui.label(t.not_scanned);
+        return;
+    }
+    if let Some(e) = tree.errors.get(&id) {
+        ui.strong(t.err_tip_own);
+        ui.label(e);
+    }
+    // Folders below this one with an error (looked up only while the mouse is here).
+    let mut inside: Vec<(NodeId, &String)> = tree
+        .errors
+        .iter()
+        .filter(|(e, _)| **e != id && tree.ancestors(**e).contains(&id))
+        .map(|(e, text)| (*e, text))
+        .collect();
+    inside.sort_by_key(|(e, _)| *e);
+    if !inside.is_empty() {
+        ui.strong(t.err_tip_inside.replace("{n}", &format::count(inside.len() as u64)));
+        for (e, text) in inside.iter().take(5) {
+            let p = tree.path(*e);
+            let shown = p.strip_prefix(&tree.root_path).unwrap_or(&p).display().to_string();
+            ui.label(format!("• {shown}: {text}"));
+        }
+        if inside.len() > 5 {
+            ui.label(RichText::new("…").weak());
+        }
+    }
+    let cancelled_below = tree.errors.is_empty() || inside.is_empty() && !tree.errors.contains_key(&id);
+    if cancelled_below {
+        ui.label(t.not_scanned);
+    }
+    ui.add_space(4.0);
+    ui.label(RichText::new(if cfg!(target_os = "macos") { t.err_tip_mac } else { t.err_tip_admin }).weak());
 }

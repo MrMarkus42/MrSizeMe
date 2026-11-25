@@ -163,7 +163,7 @@ impl Tree {
     /// in the sums, so the parts always add up to the whole.
     pub fn value(&self, id: NodeId, m: Measure) -> u64 {
         let n = self.node(id);
-        if n.has(flags::HARDLINK_DUP) {
+        if n.has(flags::HARDLINK_DUP | flags::ONLINE_ONLY) {
             return 0;
         }
         match m {
@@ -244,7 +244,8 @@ impl Tree {
     pub fn sum_up(&mut self) {
         for id in (1..self.nodes.len()).rev() {
             let n = &self.nodes[id];
-            let counted = !n.has(flags::HARDLINK_DUP);
+            // Further hard links and cloud files that are only online take no space here.
+            let counted = !n.has(flags::HARDLINK_DUP | flags::ONLINE_ONLY);
             let (size, alloc) = if counted { (n.size, n.allocated) } else { (0, 0) };
             let files = n.files + u64::from(n.kind != Kind::Dir);
             let dirs = n.dirs + u64::from(n.kind == Kind::Dir);
@@ -296,7 +297,7 @@ impl Tree {
     /// What a node adds to the sums of its parent: size, allocated, files, folders.
     fn share(&self, id: NodeId) -> [u64; 4] {
         let n = self.node(id);
-        let counted = !n.has(flags::HARDLINK_DUP);
+        let counted = !n.has(flags::HARDLINK_DUP | flags::ONLINE_ONLY);
         let (size, alloc) = if counted { (n.size, n.allocated) } else { (0, 0) };
         [size, alloc, n.files + u64::from(n.kind != Kind::Dir), n.dirs + u64::from(n.kind == Kind::Dir)]
     }
@@ -328,12 +329,16 @@ impl Tree {
 
     /// Sets or clears a flag of one node.
     pub fn set_flag(&mut self, id: NodeId, flag: u8, on: bool) {
+        let before = self.share(id);
         let n = &mut self.nodes[id as usize];
         if on {
             n.flags |= flag;
         } else {
             n.flags &= !flag;
         }
+        // "Only online" changes what the folders above count.
+        let after = self.share(id);
+        self.adjust_above(id, before, after, crate::tree::NO_TIME);
     }
 
     /// Adds one more entry to a folder (live update) and returns its id.
@@ -547,6 +552,23 @@ mod tests {
         t.sum_up();
         assert_eq!(t.root().size, 50);
         assert_eq!(t.root().files, 2);
+    }
+
+    #[test]
+    fn online_only_files_take_no_space() {
+        let mut t = Tree::new(PathBuf::from("/x"), Kind::Dir);
+        let mut cloud = file("film.mp4", 900);
+        cloud.flags |= flags::ONLINE_ONLY;
+        let first = t.add_children(ROOT, [file("a", 50), cloud]);
+        t.sum_up();
+        assert_eq!(t.root().size, 50);
+        assert_eq!(t.root().files, 2);
+        assert_eq!(t.value(first + 1, Measure::Size), 0);
+        // Downloaded again (live update): now it counts.
+        t.set_flag(first + 1, flags::ONLINE_ONLY, false);
+        assert_eq!(t.root().size, 950);
+        t.set_flag(first + 1, flags::ONLINE_ONLY, true);
+        assert_eq!(t.root().size, 50);
     }
 
     #[test]

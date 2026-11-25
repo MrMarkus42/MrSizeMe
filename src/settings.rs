@@ -29,6 +29,17 @@ pub struct Settings {
     pub update_every_days: u16,
     /// Time of the last check (seconds since 1970).
     pub update_last: i64,
+    /// Text size in percent.
+    pub zoom: u16,
+    /// Model for OpenRouter (for example "openrouter/auto").
+    pub openrouter_model: String,
+    /// The AI that is preselected in "What is this?".
+    pub ai_provider: crate::ai::Provider,
+    /// 0 like the system, 1 light, 2 dark.
+    pub theme: u8,
+    /// Window size at the last end (0: the default size).
+    pub window_w: u16,
+    pub window_h: u16,
 }
 
 impl Default for Settings {
@@ -46,6 +57,12 @@ impl Default for Settings {
             updates: None,
             update_every_days: 7,
             update_last: 0,
+            zoom: 110,
+            openrouter_model: "openrouter/auto".into(),
+            ai_provider: crate::ai::Provider::GoogleAi,
+            theme: 0,
+            window_w: 0,
+            window_h: 0,
         }
     }
 }
@@ -86,6 +103,12 @@ fn file() -> Option<PathBuf> {
 }
 
 impl Settings {
+    /// The window size to start with (logical pixels).
+    pub fn window_size(&self) -> [f32; 2] {
+        let ok = (720..=10_000).contains(&self.window_w) && (420..=10_000).contains(&self.window_h);
+        if ok { [f32::from(self.window_w), f32::from(self.window_h)] } else { [1280.0, 800.0] }
+    }
+
     /// Reads the settings; unknown or broken lines are ignored.
     pub fn load() -> Settings {
         file().and_then(|f| std::fs::read_to_string(f).ok()).map(|t| Self::parse(&t)).unwrap_or_default()
@@ -120,6 +143,22 @@ impl Settings {
                     }
                 }
                 "update_last" => s.update_last = value.parse().unwrap_or(0),
+                "openrouter_model" if !value.is_empty() => s.openrouter_model = value,
+                "window_w" => s.window_w = value.parse().unwrap_or(0),
+                "window_h" => s.window_h = value.parse().unwrap_or(0),
+                "theme" => s.theme = value.parse::<u8>().ok().filter(|t| *t <= 2).unwrap_or(0),
+                "ai_provider" => {
+                    if let Some(p) = crate::ai::Provider::from_code(&value) {
+                        s.ai_provider = p;
+                    }
+                }
+                "zoom" => {
+                    if let Ok(z) = value.parse::<u16>()
+                        && (50..=300).contains(&z)
+                    {
+                        s.zoom = z;
+                    }
+                }
                 "warn_percent" => {
                     if let Ok(p) = value.parse::<u8>()
                         && p <= 50
@@ -137,7 +176,7 @@ impl Settings {
         // Values never contain line breaks (they come from single-line fields).
         let clean = |v: &str| v.replace(['\n', '\r'], " ");
         format!(
-            "# MrSizeMe settings\nlang={}\noffline={}\nollama_url={}\nollama_model={}\ngemini_model={}\nclaude_model={}\nhistory={}\nlive={}\nwarn_percent={}\nupdates={}\nupdate_every_days={}\nupdate_last={}\n",
+            "# MrSizeMe settings\nlang={}\noffline={}\nollama_url={}\nollama_model={}\ngemini_model={}\nclaude_model={}\nhistory={}\nlive={}\nwarn_percent={}\nupdates={}\nupdate_every_days={}\nupdate_last={}\nzoom={}\nopenrouter_model={}\nai_provider={}\ntheme={}\nwindow_w={}\nwindow_h={}\n",
             self.lang.map_or("", Lang::code),
             u8::from(self.offline),
             clean(&self.ollama_url),
@@ -150,6 +189,12 @@ impl Settings {
             self.updates.map_or("", |u| if u { "1" } else { "0" }),
             self.update_every_days,
             self.update_last,
+            self.zoom,
+            clean(&self.openrouter_model),
+            self.ai_provider.code(),
+            self.theme,
+            self.window_w,
+            self.window_h,
         )
     }
 

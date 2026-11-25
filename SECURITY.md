@@ -19,7 +19,8 @@ public issue. You will get an answer within a few days.
   above it, its size and the kind of system – never a full path, your user
   name or file contents. “Fully offline” blocks all of it.
 * **Your AI keys stay in the system key store** (Windows Credential
-  Manager, macOS Keychain, on Linux a file readable only by you). They are
+  Manager, macOS Keychain, on Linux a file readable only by you). This
+  also applies to the OpenRouter key. They are
   never written to the settings, the log or the repository, and are only
   sent to the service they belong to.
 * **Nothing is deleted for good.** Files and folders only go to the recycle

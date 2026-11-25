@@ -56,7 +56,7 @@ fn main() -> ExitCode {
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_title("MrSizeMe")
         .with_app_id("mrsizeme")
-        .with_inner_size([1280.0, 800.0])
+        .with_inner_size(mrsizeme::settings::Settings::load().window_size())
         .with_min_inner_size([720.0, 420.0]);
     match eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon/mrsizeme-256.png")) {
         Ok(icon) => viewport = viewport.with_icon(icon),

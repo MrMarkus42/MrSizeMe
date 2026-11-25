@@ -9,6 +9,7 @@ use std::io;
 /// The services a key can be stored for.
 pub const GEMINI: &str = "gemini";
 pub const CLAUDE: &str = "claude";
+pub const OPENROUTER: &str = "openrouter";
 
 fn blocked() -> io::Result<()> {
     if crate::external::is_blocked() {

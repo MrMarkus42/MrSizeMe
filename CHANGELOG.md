@@ -1,5 +1,38 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Cloud files that are only online (OneDrive, iCloud) are no longer counted
+  as used space anywhere: not in the folder sizes, the charts, the file
+  types, categories, largest files or the scan progress. They are shown
+  greyed with an explanation and counted only in the Cloud view. The fast
+  NTFS scan with admin rights now recognises them too.
+- The Cloud view (and other wide lists) no longer push the chart out of the
+  window; the bar above the chart wraps in narrow windows.
+- The status bar sign next to "Live" is now a drawn dot (the font did not
+  have the circle character).
+
+### Added
+- Settings window (gear at the top right, Ctrl+, / ⌘,) with the tabs
+  General (language, appearance, text size), Scanning, AI, Updates (check
+  now, how often) and Privacy & system.
+- OpenRouter as a further AI service: own key, model chosen from the list
+  OpenRouter offers (search, "free only"); the AI preselected in "What is
+  this?" can be set.
+- Easier to read: the program uses the font of the system (Segoe UI,
+  Helvetica Neue, Noto Sans / DejaVu Sans) instead of the thin built-in
+  one, slightly larger text, stronger contrast, and a text size setting
+  (90–160 %, also Ctrl + plus/minus; remembered).
+- The menu band adapts to narrow windows: it shows only the icons (the
+  names as tooltips).
+- The warning sign of a folder explains what could not be read (also for
+  folders inside it) and what helps.
+- macOS: a real menu bar (MrSizeMe, File, Edit, View, Window, Help) with
+  the usual shortcuts; the menu band in the window stays.
+- The window size is remembered.
+- "Website" button in the Help tab.
+
 ## [1.0.0] - 2026-11-25
 
 First release.

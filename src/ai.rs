@@ -28,9 +28,52 @@ pub enum Provider {
     Gemini,
     /// Anthropic Claude with the user's own key.
     Claude,
+    /// OpenRouter: many models through one key of the user.
+    OpenRouter,
 }
 
 impl Provider {
+    /// All providers in the order of the buttons (and of `Texts::providers`).
+    pub const ALL: [Provider; 6] = [
+        Provider::GoogleAi,
+        Provider::GoogleSearch,
+        Provider::Ollama,
+        Provider::Gemini,
+        Provider::Claude,
+        Provider::OpenRouter,
+    ];
+
+    /// Short code for the settings file.
+    pub fn code(self) -> &'static str {
+        match self {
+            Provider::GoogleAi => "google-ai",
+            Provider::GoogleSearch => "google",
+            Provider::Ollama => "ollama",
+            Provider::Gemini => "gemini",
+            Provider::Claude => "claude",
+            Provider::OpenRouter => "openrouter",
+        }
+    }
+
+    pub fn from_code(code: &str) -> Option<Provider> {
+        Provider::ALL.into_iter().find(|p| p.code() == code)
+    }
+
+    /// Position in [`Provider::ALL`] (for the button texts).
+    pub fn index(self) -> usize {
+        Provider::ALL.iter().position(|&p| p == self).unwrap_or(0)
+    }
+
+    /// Where the user's key for this service is stored, if it needs one.
+    pub fn key_service(self) -> Option<&'static str> {
+        match self {
+            Provider::Gemini => Some(crate::secrets::GEMINI),
+            Provider::Claude => Some(crate::secrets::CLAUDE),
+            Provider::OpenRouter => Some(crate::secrets::OPENROUTER),
+            _ => None,
+        }
+    }
+
     /// Opens the browser instead of answering inside the program.
     pub fn uses_browser(self) -> bool {
         matches!(self, Provider::GoogleAi | Provider::GoogleSearch)
@@ -280,11 +323,71 @@ pub fn ask(provider: Provider, question: &str, settings: &Settings, key: Option<
                 blocks.iter().filter(|b| b["type"] == "text").filter_map(|b| b["text"].as_str()).collect();
             text_or_error((!text.is_empty()).then(|| text.join("\n")))
         }
+        Provider::OpenRouter => {
+            if settings.openrouter_model.trim().is_empty() {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "no model chosen"));
+            }
+            let body = json!({
+                "model": settings.openrouter_model.trim(),
+                "max_tokens": 4000,
+                "messages": [
+                    {"role": "system", "content": system_prompt()},
+                    {"role": "user", "content": question},
+                ],
+            });
+            let auth = format!("Bearer {}", need_key()?);
+            let headers = [
+                ("Authorization", auth.as_str()),
+                // Shown on openrouter.ai as the calling program.
+                ("HTTP-Referer", "https://mrmarkus42.github.io/MrSizeMe/"),
+                ("X-Title", "MrSizeMe"),
+            ];
+            let v = post("https://openrouter.ai/api/v1/chat/completions", &headers, &body)?;
+            text_or_error(v["choices"][0]["message"]["content"].as_str().map(str::to_string))
+        }
     }
 }
 
 fn text_or_error(t: Option<String>) -> io::Result<String> {
     t.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).ok_or_else(|| io::Error::other("empty answer"))
+}
+
+/// A model OpenRouter offers.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RouterModel {
+    pub id: String,
+    pub name: String,
+    /// Costs nothing (prompt and answer free).
+    pub free: bool,
+}
+
+/// Reads the model list of OpenRouter (an answer of `/api/v1/models`).
+pub fn parse_router_models(v: &Value) -> Vec<RouterModel> {
+    let mut list: Vec<RouterModel> = v["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|m| {
+            let id = m["id"].as_str()?.to_string();
+            let name = m["name"].as_str().unwrap_or(&id).chars().take(120).collect();
+            let zero =
+                |k: &str| m["pricing"][k].as_str().is_some_and(|p| p.parse::<f64>().is_ok_and(|x| x == 0.0));
+            Some(RouterModel { free: zero("prompt") && zero("completion"), id, name })
+        })
+        .collect();
+    list.sort_by_key(|m| m.name.to_lowercase());
+    list
+}
+
+/// The models OpenRouter offers (no key needed for the list).
+pub fn openrouter_models(settings: &Settings) -> io::Result<Vec<RouterModel>> {
+    check_allowed(settings, Provider::OpenRouter)?;
+    let mut resp = agent()
+        .get("https://openrouter.ai/api/v1/models")
+        .call()
+        .map_err(|e| io::Error::other(e.to_string()))?;
+    let v: Value = resp.body_mut().read_json().map_err(|e| io::Error::other(e.to_string()))?;
+    Ok(parse_router_models(&v))
 }
 
 /// The models a local Ollama offers.
@@ -337,9 +440,28 @@ mod tests {
     #[test]
     fn nothing_goes_out_in_tests() {
         let s = Settings::default();
-        for p in [Provider::Ollama, Provider::Gemini, Provider::Claude] {
+        for p in [Provider::Ollama, Provider::Gemini, Provider::Claude, Provider::OpenRouter] {
             assert!(ask(p, "frage", &s, Some("key")).is_err());
         }
         assert!(ollama_models(&s).is_err());
+        assert!(openrouter_models(&s).is_err());
+    }
+
+    #[test]
+    fn providers_and_router_models() {
+        for p in Provider::ALL {
+            assert_eq!(Provider::from_code(p.code()), Some(p));
+            assert_eq!(Provider::ALL[p.index()], p);
+        }
+        assert!(Provider::OpenRouter.is_online() && !Provider::OpenRouter.uses_browser());
+        let v = json!({"data": [
+            {"id": "b/paid", "name": "Bezahlt", "pricing": {"prompt": "0.000001", "completion": "0.000002"}},
+            {"id": "a/free:free", "name": "Gratis", "pricing": {"prompt": "0", "completion": "0"}},
+            {"name": "ohne id"}
+        ]});
+        let m = parse_router_models(&v);
+        assert_eq!(m.len(), 2);
+        assert_eq!((m[0].id.as_str(), m[0].free), ("b/paid", false));
+        assert_eq!((m[1].id.as_str(), m[1].free), ("a/free:free", true));
     }
 }

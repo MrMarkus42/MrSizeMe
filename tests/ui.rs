@@ -475,3 +475,78 @@ fn update_question_and_offline_check() {
     assert!(h.query_all_by_label_contains("es wird nicht nach Updates gesucht").next().is_some());
     assert!(h.query_by_label("Fehler").is_none());
 }
+
+/// A folder with a cloud file that is only online and a folder that could not be read.
+fn cloud_and_error_tree() -> mrsizeme::tree::Tree {
+    use mrsizeme::tree::{Kind, NO_PARENT, Node, ROOT, Tree, flags};
+    use std::ffi::OsStr;
+    let mut t = Tree::new(std::path::PathBuf::from("/home/x"), Kind::Dir);
+    let dir = |n: &str| Node::new(OsStr::new(n).into(), NO_PARENT, Kind::Dir);
+    let file = |n: &str, size: u64, online: bool| {
+        let mut f = Node::new(OsStr::new(n).into(), NO_PARENT, Kind::File);
+        f.size = size;
+        f.allocated = if online { 0 } else { size };
+        if online {
+            f.flags |= flags::ONLINE_ONLY;
+        }
+        f
+    };
+    let top = t.add_children(ROOT, [dir("OneDrive"), dir("Privat")]);
+    t.add_children(top, [file("lokal.txt", 3 << 20, false), file("film.mp4", 700 << 20, true)]);
+    let inner = t.add_children(top + 1, [dir("Gesperrt")]);
+    let mut locked = t.node(inner).clone();
+    locked.flags |= flags::ERROR;
+    t.nodes[inner as usize] = locked;
+    t.errors.insert(inner, "Zugriff verweigert".into());
+    t.sum_up();
+    t
+}
+
+#[test]
+fn online_files_do_not_count_and_errors_are_explained() {
+    let _guard = lock();
+    setup();
+    i18n::set_lang(Lang::De);
+    let mut h = Harness::builder()
+        .with_size(eframe::egui::vec2(1300.0, 820.0))
+        .with_max_steps(32)
+        .build_eframe(|_cc| App::with_tree(cloud_and_error_tree()));
+    h.run();
+    // The scanned folder holds only the local 3 MB, not the 700 MB that are only online.
+    assert!(h.query_all_by_label("3,00 MB").next().is_some());
+    assert!(h.query_all_by_label_contains("703").next().is_none());
+    // The warning sign explains what could not be read.
+    h.get_by_label("Privat").click();
+    h.run();
+    h.get_all_by_label("⚠").next().unwrap().hover();
+    h.run();
+    assert!(h.query_all_by_label_contains("nicht vollständig gelesen").next().is_some());
+    assert!(h.query_all_by_label_contains("Zugriff verweigert").next().is_some());
+}
+
+#[test]
+fn settings_window_tabs() {
+    let _guard = lock();
+    let t = sample();
+    let mut h = harness(&t);
+    h.get_by_label("Einstellungen").click();
+    h.run();
+    // General: text size.
+    h.get_by_label("125 %").click();
+    h.run();
+    h.run();
+    assert!((h.ctx.zoom_factor() - 1.25).abs() < 0.01);
+    // AI: OpenRouter with key and model.
+    h.get_by_label("KI").click();
+    h.run();
+    assert!(h.query_all_by_label("OpenRouter").next().is_some());
+    assert!(h.query_all_by_label_contains("openrouter.ai").next().is_some());
+    // Updates and system.
+    h.get_all_by_label("Updates").last().unwrap().click();
+    h.run();
+    assert!(h.query_all_by_label_contains("Installierte Version").next().is_some());
+    h.get_by_label("Datenschutz & System").click();
+    h.run();
+    assert!(h.query_all_by_label("Komplett offline").next().is_some());
+    assert!(h.query_by_label("Fehler").is_none());
+}
