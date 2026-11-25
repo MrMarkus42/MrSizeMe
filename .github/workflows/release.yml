@@ -84,7 +84,9 @@ jobs:
 
   linux:
     needs: check
-    runs-on: ubuntu-latest
+    # The oldest available system, so the program also runs on older Linux
+    # versions (it needs at least the C library of the build system).
+    runs-on: ubuntu-22.04
     env:
       VERSION: ${{ needs.check.outputs.version }}
     steps:
