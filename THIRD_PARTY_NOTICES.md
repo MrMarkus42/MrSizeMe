@@ -348,8 +348,8 @@ included in their source distributions (crates.io).
 | wayland-scanner | 0.31.11 | MIT | https://github.com/smithay/wayland-rs |
 | wayland-sys | 0.31.11 | MIT | https://github.com/smithay/wayland-rs |
 | web-time | 1.1.0 | MIT OR Apache-2.0 | https://github.com/daxpedda/web-time |
-| webpki-root-certs | 1.0.11 | CDLA-Permissive-2.0 | https://github.com/rustls/webpki-roots |
-| webpki-roots | 1.0.11 | CDLA-Permissive-2.0 | https://github.com/rustls/webpki-roots |
+| webpki-root-certs | 1.0.12 | CDLA-Permissive-2.0 | https://github.com/rustls/webpki-roots |
+| webpki-roots | 1.0.12 | CDLA-Permissive-2.0 | https://github.com/rustls/webpki-roots |
 | weezl | 0.1.12 | MIT OR Apache-2.0 | https://github.com/image-rs/weezl |
 | wgpu | 30.0.1 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
 | wgpu-core | 30.0.1 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |

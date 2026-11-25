@@ -1,6 +1,6 @@
 [package]
 name = "mrsizeme"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.95"
 description = "MrSizeMe - shows which folders and files use the space on your disks"

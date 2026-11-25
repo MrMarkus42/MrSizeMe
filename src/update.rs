@@ -330,6 +330,12 @@ QtKMXWyYcwdpZAlPF7tE2ENJkRd1ujvKjlj1m9RtHTBnZPa5WKU5uWRs5GoP5M/VqE81QFuMKI5k/SfN
     }
 
     #[test]
+    fn the_update_key_is_built_in() {
+        // A release without a key could never install updates.
+        assert!(public_key().is_some());
+    }
+
+    #[test]
     fn nothing_happens_in_tests() {
         assert!(check(false).is_err());
         assert_eq!(install(Path::new("x"), Package::Archive).unwrap(), Outcome::Blocked);

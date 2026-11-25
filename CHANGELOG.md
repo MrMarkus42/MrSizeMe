@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## [1.0.0] - 2026-11-25
+
+First release.
+
+### Security
+- RUSTSEC-2026-0592 (url) and RUSTSEC-2026-0594 (cookie) do not affect this
+  release: neither crate is built into any of the programs. The fixed
+  versions follow in 1.0.1 (14-day rule for new releases).
 
 ### Added
 - Scanner: parallel reading of folders, size and space on disk, hard links

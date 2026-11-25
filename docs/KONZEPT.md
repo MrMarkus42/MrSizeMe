@@ -163,8 +163,10 @@ sind mit minisign signiert; der öffentliche Schlüssel ist eingebaut.
 
 * `url` 2.5.9 und `cookie` 0.18.3 (Sicherheitskorrekturen RUSTSEC-2026-0592
   und -0594) einspielen, sobald sie 14 Tage alt sind (ab 4.12. bzw. 7.12.),
-  spätestens vor dem ersten Release. Beide Pakete werden derzeit in kein
-  Programm eingebaut (nur als ungenutzte Wahlmöglichkeit in Cargo.lock).
+  mit Version 1.0.1. Vor 1.0.0 (25.11.) geprüft: Beide Pakete werden in kein
+  Programm eingebaut (`cargo tree -i` für Windows, macOS und Linux leer), sie
+  stehen nur als ungenutzte Wahlmöglichkeit in Cargo.lock. Alle übrigen
+  neueren Paketversionen waren am 25.11. jünger als 14 Tage.
 * KI-Anbieter: Gemini-Modell voreingestellt `gemini-3.5-flash-lite`,
   Claude-Modell `claude-opus-5-5` (beide in den KI-Einstellungen änderbar).
   Der Google-KI-Modus wird über die Adresse `…/search?udm=50&q=…` geöffnet;
